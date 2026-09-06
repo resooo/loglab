@@ -1,6 +1,6 @@
 # LogLab 项目交接文档
 
-> 版本：v1.6.0（versionCode 10）· 更新日期：2026-09-06
+> 版本：v1.6.1（versionCode 11）· 更新日期：2026-09-06
 > 面向接手开发/维护的工程师。读完本文应能独立完成：环境搭建、构建出包、理解核心链路、继续迭代。
 
 ---
@@ -22,7 +22,7 @@
 
 ---
 
-## 2. 功能清单（v1.6.0）
+## 2. 功能清单（v1.6.1）
 
 | 模块 | 功能 |
 |---|---|
@@ -194,7 +194,7 @@ app/src/main/java/com/loglab/app/
 - 签名：`app/keystore/debug.jks`，store/key 密码均 `logcatgrabber`，alias `logcatgrabber`
   （release 直接复用此 keystore，正式发布前建议换正式证书）
 - **版本号约定**：每个功能批次 `versionName +0.1`（bug 修复 +0.01），`versionCode` 恒 +1。
-  当前 v1.6.0 / 10。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
+  当前 v1.6.1 / 11。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
 
 ### 6.4 构建已知坑（沙箱实测，必读）
 
@@ -223,6 +223,7 @@ app/src/main/java/com/loglab/app/
 | 1.5.0 | 8 | ★ 品牌与包名重塑：项目名 LogLab、包名 com.loglab.app（applicationId/namespace/目录/文档全量迁移）；v1.5.0 起与旧包名 App 无法覆盖安装（需卸载重装） |
 | 1.5.1 | 9 | 修复崩溃/运行日志/导出文件分享在非 Activity context 下崩溃（chooser 与 target 均补 FLAG_ACTIVITY_NEW_TASK，共 5 处）；logo 重绘：极简剪影猫头，内容占比 65% → ~48%，视觉不再突兀 |
 | 1.6.0 | 10 | ★ 应用内更新 + 开源准备：GitHub Releases 检查/下载/安装（UpdateManager，设置页「关于」入口）；buildConfig 开启；签名支持 CI 环境变量注入；Gradle wrapper 8.9；README/LICENSE(MIT)/.gitignore（keystore 不入库）；.github/workflows/release.yml tag 自动发布；git init（remote: github.com/resooo/loglab） |
+| 1.6.1 | 11 | ★ 修复：无线调试关闭后启动检查误报「已连接」——mDNS 陈旧缓存（幽灵服务）+ 握手成功即判连接；现在所有 Ready/PortUpdated 结论强制 echo 复验（echoOk()），失败即断开并提示「无线调试可能已关闭」 |
 
 ---
 
@@ -256,4 +257,4 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 #    App 首页点状态行 → 连接页 → 按分屏引导配对（详见使用方法页图文）
 ```
 
-有任何与本文冲突的实现细节，以代码为准；本文档对应 v1.6.0（versionCode 10）。
+有任何与本文冲突的实现细节，以代码为准；本文档对应 v1.6.1（versionCode 11）。

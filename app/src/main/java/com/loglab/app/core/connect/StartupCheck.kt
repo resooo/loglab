@@ -80,6 +80,15 @@ class StartupCheck @Inject constructor(
         _phase.value = text
     }
 
+    /**
+     * 真实性复验：TLS 握手能过 ≠ adbd 活着（无线调试关闭后 adbd 半死时仍监听 TLS）。
+     * 一切「连接成功」的结论（Ready / PortUpdated）都必须先过这一关。
+     */
+    private suspend fun echoOk(): Boolean =
+        runCatching {
+            channelManager.adbChannel.execute("echo probe-ok").getOrNull()
+        }.getOrNull()?.trim() == "probe-ok"
+
     suspend fun run(): StartupCheckResult = withContext(Dispatchers.IO) {
         val cur = settings.current()
         logger.log("CHECK", "启动检查开始：已配对=${cur.adbPaired}，存档地址=${cur.adbHost}:${cur.adbPort}")
@@ -140,12 +149,12 @@ class StartupCheck @Inject constructor(
                 logger.log("CHECK", "mDNS 发现同 IP 新端口 $oldPort → ${newer.port}，切换并验证")
                 settings.update { it.copy(adbHost = newer.host, adbPort = newer.port) }
                 val conn = runCatching { channelManager.autoConnect(ChannelPolicy.ADB_ONLY) }.getOrNull()
-                if (conn?.isSuccess == true) {
-                    logger.log("CHECK", "新端口 ${newer.port} 可用，已更新")
+                if (conn?.isSuccess == true && echoOk()) {
+                    logger.log("CHECK", "新端口 ${newer.port} 可用（echo 复验通过），已更新")
                     setPhase("")
                     return@withContext StartupCheckResult.PortUpdated(newer.host, oldPort, newer.port)
                 }
-                // 新端口不可用：回滚，保住本来能用的旧端口
+                // 新端口不可用（握手失败或 echo 复验不过）：回滚，保住本来能用的旧端口
                 logger.log("CHECK", "新端口 ${newer.port} 不可用：${conn?.exceptionOrNull()?.message}，回滚 $oldPort")
                 settings.update { it.copy(adbHost = cur.adbHost, adbPort = oldPort) }
                 runCatching { channelManager.autoConnect(ChannelPolicy.ADB_ONLY) }
@@ -201,8 +210,8 @@ class StartupCheck @Inject constructor(
                 settings.update { it.copy(adbHost = matched.host, adbPort = matched.port) }
                 logger.log("CHECK", "端口/地址变化：$oldPort → ${matched.port}，已更新配置并重连")
                 val conn = runCatching { channelManager.autoConnect(ChannelPolicy.ADB_ONLY) }.getOrNull()
-                return@withContext if (conn?.isSuccess == true) {
-                    logger.log("CHECK", "新端口重连成功")
+                return@withContext if (conn?.isSuccess == true && echoOk()) {
+                    logger.log("CHECK", "新端口重连成功（echo 复验通过）")
                     StartupCheckResult.PortUpdated(matched.host, oldPort, matched.port)
                 } else {
                     logger.log("CHECK", "新端口重连失败：${conn?.exceptionOrNull()?.message}")
@@ -212,20 +221,44 @@ class StartupCheck @Inject constructor(
                     )
                 }
             }
-            // 地址未变但直连失败：可能是瞬时抖动，重试一次
+            // 地址未变但直连失败：可能是瞬时抖动，重试一次。
+            // ★ 必须做 echo 复验：握手成功 ≠ adbd 活着。无线调试关闭后，
+            // 系统 NsdManager 常缓存旧服务通告（goodbye 丢失/ROM 不发），mDNS 会
+            // 报出与存档完全相同的"幽灵"服务；此时握手照样能过（adbd 半死仍监听
+            // TLS），但命令执行不了——不能凭握手成功就推翻前面的 echo 失败结论。
             val retry = runCatching { channelManager.autoConnect(ChannelPolicy.ADB_ONLY) }.getOrNull()
             if (retry?.isSuccess == true) {
-                logger.log("CHECK", "同地址重试连接成功")
-                return@withContext StartupCheckResult.Ready(cur.adbHost, cur.adbPort)
+                if (echoOk()) {
+                    logger.log("CHECK", "同地址重试连接成功，echo 复验通过")
+                    return@withContext StartupCheckResult.Ready(cur.adbHost, cur.adbPort)
+                }
+                logger.log(
+                    "CHECK",
+                    "同地址重试握手成功但 echo 复验失败：" +
+                        "mDNS 返回的是陈旧缓存服务，实为无线调试已关闭"
+                )
+                // 清掉假连接，避免通道条显示"已连接"
+                runCatching { channelManager.disconnect() }
+            } else {
+                logger.log("CHECK", "同地址重试仍失败：${retry?.exceptionOrNull()?.message}")
             }
-            logger.log("CHECK", "同地址重试仍失败：${retry?.exceptionOrNull()?.message}")
         }
 
-        // ④ 下结论：mDNS 无发现（无线调试未开启/ROM 限制）或发现但连不上，附诊断
+        // ④ 下结论：mDNS 无发现（无线调试未开启/ROM 限制）或发现但连不上，附诊断。
+        // 特例：mDNS 报的服务与存档地址完全一致 → 这是系统缓存的"幽灵"通告
+        // （无线调试重开端口必变；关闭后通告也该消失），不是真实可连服务。
+        val staleCacheOnly = candidates.isNotEmpty() && candidates.all {
+            it.host == cur.adbHost && it.port == cur.adbPort
+        }
         val detail = buildString {
             append(
-                if (devices.isEmpty()) scanSummary()
-                else "发现 ${devices.size} 个无线调试服务但连接不上"
+                when {
+                    devices.isEmpty() -> scanSummary()
+                    staleCacheOnly ->
+                        "无线调试可能已关闭：系统 mDNS 仍缓存旧服务 ${cur.adbHost}:${cur.adbPort}" +
+                            "（握手可通但无法执行命令），请到「设置 → 开发者选项 → 无线调试」确认开关"
+                    else -> "发现 ${devices.size} 个无线调试服务但连接不上"
+                }
             )
             direct?.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
                 ?.let { append("；直连探测：").append(it) }
