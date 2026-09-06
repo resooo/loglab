@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -17,6 +18,9 @@ import javax.inject.Singleton
 
 /** 单轮 mDNS 扫描窗口：无线调试重开后通告可能延迟数秒；6 秒内必有结论，不让用户干等 */
 private const val MDNS_WINDOW_MS = 6000L
+
+/** 幽灵缓存复核窗口：与首轮等长，给刚重开的无线调试新通告足够时间出现 */
+private const val MDNS_RESCAN_WINDOW_MS = 6000L
 
 /** 启动智能检查结果 */
 sealed class StartupCheckResult {
@@ -85,6 +89,11 @@ class StartupCheck @Inject constructor(
     private fun setPhase(text: String) {
         _phase.value = text
     }
+
+    /** 连接当前配置地址并做 echo 复验（握手成功 ≠ adbd 活着） */
+    private suspend fun connectVerified(): Boolean =
+        runCatching { channelManager.autoConnect(ChannelPolicy.ADB_ONLY) }.getOrNull()?.isSuccess == true &&
+            echoOk()
 
     /**
      * 真实性复验：TLS 握手能过 ≠ adbd 活着（无线调试关闭后 adbd 半死时仍监听 TLS）。
@@ -250,20 +259,59 @@ class StartupCheck @Inject constructor(
             }
         }
 
-        // ④ 下结论：
-        //  - mDNS 只报了与存档地址完全一致的服务 → 系统缓存的"幽灵"通告
-        //    （无线调试重开端口必变；关闭后通告也该消失），判定：无线调试未开启；
-        //  - mDNS 完全无发现且扫描器没有报"发现但解析失败/启动失败" → 同样按
-        //    未开启处理（最常见的唯一原因），其余受限场景保留详细诊断文案。
+        // ④ mDNS 只报出与存档完全一致的服务 = 系统缓存的"幽灵"通告
+        //    （无线调试重开端口必变；关闭后通告也该消失）。
+        //    ★ 此时不能立即断定未开启：无线调试**刚重开**时，新端口的 mDNS 通告
+        //    常常要数秒才会被系统发现（实测可晚 11 秒+），v1.6.2 在这里直接判
+        //    "未开启"，导致重开后首次检查误报、要手动重试一两次才正常。
+        //    现在自动再扫一轮（发现新通告立即响应，无新通告等满窗口才下结论），
+        //    扫到同 IP 新端口就直接切换并复验，把"手动重试"变成"自动等待"。
         val staleCacheOnly = candidates.isNotEmpty() && candidates.all {
             it.host == cur.adbHost && it.port == cur.adbPort
         }
+        if (staleCacheOnly) {
+            setPhase("正在等待无线调试服务通告…")
+            logger.log("CHECK", "mDNS 仅报出存档地址（疑为幽灵缓存），自动再扫一轮等待新服务通告")
+            // firstOrNull：出现符合条件的快照立即返回（内部取消扫描流）；
+            // 整个窗口内都没出现才返回 null。
+            val fresh = runCatching {
+                nsd.discover(MDNS_RESCAN_WINDOW_MS).firstOrNull { snap ->
+                    snap.any {
+                        it.kind != NsdDiscovery.Kind.PAIRING &&
+                            it.host == cur.adbHost && it.port != cur.adbPort
+                    }
+                }?.firstOrNull {
+                    it.kind != NsdDiscovery.Kind.PAIRING &&
+                        it.host == cur.adbHost && it.port != cur.adbPort
+                }
+            }.getOrNull()
+            if (fresh != null) {
+                val oldPort = cur.adbPort
+                settings.update { it.copy(adbHost = fresh.host, adbPort = fresh.port) }
+                logger.log("CHECK", "mDNS 第 2 轮发现新端口 $oldPort → ${fresh.port}，切换并验证")
+                if (connectVerified()) {
+                    logger.log("CHECK", "第 2 轮新端口验证通过（echo 复验 OK），连接成功")
+                    setPhase("")
+                    return@withContext StartupCheckResult.PortUpdated(fresh.host, oldPort, fresh.port)
+                }
+                // 新端口验证失败：回滚到存档端口
+                settings.update { it.copy(adbHost = cur.adbHost, adbPort = oldPort) }
+                logger.log("CHECK", "第 2 轮新端口 ${fresh.port} 验证失败，回滚 $oldPort")
+            } else {
+                logger.log("CHECK", "第 2 轮仍无同 IP 新端口通告，确认无线调试未开启")
+            }
+            setPhase("")
+            return@withContext StartupCheckResult.DebugOff
+        }
+
+        // ⑤ 下结论：mDNS 完全无发现且扫描器没有报"发现但解析失败/启动失败" →
+        //    未开启（最常见的唯一原因）；其余受限场景保留详细诊断文案。
         val diag = nsd.lastScanDiagnostics
         val mdnsHealthy = diag == null || (
             diag.servicesFound == 0 && diag.startFailed.isEmpty()
         )
         val result = when {
-            staleCacheOnly || (devices.isEmpty() && mdnsHealthy) -> StartupCheckResult.DebugOff
+            devices.isEmpty() && mdnsHealthy -> StartupCheckResult.DebugOff
             devices.isEmpty() -> StartupCheckResult.NotReachable(scanSummary())
             else -> StartupCheckResult.NotReachable(
                 "发现 ${devices.size} 个无线调试服务但连接不上" +

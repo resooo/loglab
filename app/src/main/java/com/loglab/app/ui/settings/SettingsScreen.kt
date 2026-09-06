@@ -82,14 +82,6 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 连接指引：连接相关操作已不在设置页
-            Text(
-                "连接设备 / 配对：回首页点顶部状态行即可进入「连接设备」页。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
             // ==================== 状态（连接/配对 + 兜底操作） ====================
             SectionTitle("状态")
             val channelState by viewModel.channelState.collectAsState()
@@ -131,11 +123,6 @@ fun SettingsScreen(
                     Toast.makeText(context, "已清除连接地址，下次连接将重新扫描", Toast.LENGTH_SHORT).show()
                 }) { Text("清除连接地址") }
             }
-            Text(
-                "兜底说明：配对异常/密钥失效时用「重新配对」；日常操作在首页点状态行进连接页。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             SectionTitle("外观")
             Row(verticalAlignment = Alignment.CenterVertically) {
