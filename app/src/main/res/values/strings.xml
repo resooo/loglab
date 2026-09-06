@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LogLab</string>
+    <string name="channel_adb">ADB 直连</string>
+    <string name="channel_bridge">HostBridge</string>
+    <string name="notification_channel_name">实时日志跟踪</string>
+    <string name="notification_channel_desc">显示正在跟踪的应用与已捕获日志行数</string>
+    <string name="tail_notification_title">正在实时跟踪日志</string>
+</resources>
