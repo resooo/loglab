@@ -1,5 +1,7 @@
 package com.loglab.app.ui.components
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -156,26 +160,56 @@ fun HomeStatusBar(
                 )
                 Text("›", fontSize = 16.sp, color = muted)
             }
-            // 3. 检查失败：原因 + 动作
-            result != null -> Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Dot(Color(0xFFFF6B6B), Modifier.padding(end = 8.dp))
-                Text(
-                    result.message,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = onGoConnect) {
-                    Text("去连接", fontSize = 13.sp)
+            // 3. 检查失败：原因 + 动作。
+            //    「无线调试未开启」单独提示，并提供「去开启」直达开发者选项
+            result != null -> {
+                val context = LocalContext.current
+                val isDebugOff = result is StartupCheckResult.DebugOff
+                val openDevSettings = remember {
+                    {
+                        // 优先跳开发者选项；个别 ROM 无此页面则退回系统设置
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }.onFailure {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                        }
+                        Unit
+                    }
                 }
-                if (result.needsAction) {
-                    TextButton(onClick = onRetry) { Text("重试", fontSize = 13.sp) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Dot(Color(0xFFFF6B6B), Modifier.padding(end = 8.dp))
+                    Text(
+                        result.message,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isDebugOff) {
+                        TextButton(onClick = openDevSettings) {
+                            Text("去开启", fontSize = 13.sp)
+                        }
+                    } else {
+                        TextButton(onClick = onGoConnect) {
+                            Text("去连接", fontSize = 13.sp)
+                        }
+                    }
+                    if (result.needsAction) {
+                        TextButton(onClick = onRetry) { Text("重试", fontSize = 13.sp) }
+                    }
                 }
             }
             // 4. 未连接

@@ -37,11 +37,17 @@ sealed class StartupCheckResult {
         override val message get() = "检测到无线调试端口变化（$oldPort → $newPort），已自动更新并连接"
     }
 
-    /** 未配对，需要引导 */
+    /** 未配对，需要引导（与「无线调试未开启」分开提示，内容互不混淆） */
     object NeedPairing : StartupCheckResult() {
         override val connected get() = false
         override val message get() =
             "尚未完成无线调试配对：请到「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，然后在 App 设置页完成配对"
+    }
+
+    /** 无线调试未开启（mDNS 只有幽灵缓存记录/完全无发现）→ UI 显示「去开启」直达开发者选项 */
+    object DebugOff : StartupCheckResult() {
+        override val connected get() = false
+        override val message get() = "无线调试未开启，去开启"
     }
 
     /** 已配对但连不上（多为无线调试被关闭或网络不通） */
@@ -244,28 +250,30 @@ class StartupCheck @Inject constructor(
             }
         }
 
-        // ④ 下结论：mDNS 无发现（无线调试未开启/ROM 限制）或发现但连不上，附诊断。
-        // 特例：mDNS 报的服务与存档地址完全一致 → 这是系统缓存的"幽灵"通告
-        // （无线调试重开端口必变；关闭后通告也该消失），不是真实可连服务。
+        // ④ 下结论：
+        //  - mDNS 只报了与存档地址完全一致的服务 → 系统缓存的"幽灵"通告
+        //    （无线调试重开端口必变；关闭后通告也该消失），判定：无线调试未开启；
+        //  - mDNS 完全无发现且扫描器没有报"发现但解析失败/启动失败" → 同样按
+        //    未开启处理（最常见的唯一原因），其余受限场景保留详细诊断文案。
         val staleCacheOnly = candidates.isNotEmpty() && candidates.all {
             it.host == cur.adbHost && it.port == cur.adbPort
         }
-        val detail = buildString {
-            append(
-                when {
-                    devices.isEmpty() -> scanSummary()
-                    staleCacheOnly ->
-                        "无线调试可能已关闭：系统 mDNS 仍缓存旧服务 ${cur.adbHost}:${cur.adbPort}" +
-                            "（握手可通但无法执行命令），请到「设置 → 开发者选项 → 无线调试」确认开关"
-                    else -> "发现 ${devices.size} 个无线调试服务但连接不上"
-                }
+        val diag = nsd.lastScanDiagnostics
+        val mdnsHealthy = diag == null || (
+            diag.servicesFound == 0 && diag.startFailed.isEmpty()
+        )
+        val result = when {
+            staleCacheOnly || (devices.isEmpty() && mdnsHealthy) -> StartupCheckResult.DebugOff
+            devices.isEmpty() -> StartupCheckResult.NotReachable(scanSummary())
+            else -> StartupCheckResult.NotReachable(
+                "发现 ${devices.size} 个无线调试服务但连接不上" +
+                    (direct?.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
+                        ?.let { "；直连探测：$it" } ?: "")
             )
-            direct?.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
-                ?.let { append("；直连探测：").append(it) }
         }
-        logger.log("CHECK", "结论：无法连接（$detail）")
+        logger.log("CHECK", "结论：${result.message}")
         setPhase("")
-        StartupCheckResult.NotReachable(detail)
+        result
     }
 
     private fun List<NsdDiscovery.Device>.format(): String =
