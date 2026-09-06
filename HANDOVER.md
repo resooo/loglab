@@ -1,6 +1,6 @@
 # LogLab 项目交接文档
 
-> 版本：v1.6.4（versionCode 14）· 更新日期：2026-09-07
+> 版本：v1.7.0（versionCode 15）· 更新日期：2026-09-07
 > 面向接手开发/维护的工程师。读完本文应能独立完成：环境搭建、构建出包、理解核心链路、继续迭代。
 
 ---
@@ -22,18 +22,18 @@
 
 ---
 
-## 2. 功能清单（v1.6.4）
+## 2. 功能清单（v1.7.0）
 
 | 模块 | 功能 |
 |---|---|
-| 首页（抓取） | 一键抓取（主按钮 44dp + 复制/清空 40dp 图标）、工具行（搜索+进程+级别+行数下拉）、进程包名动态展开输入框（带包名选择器）、点行弹底部详情面板（复制原文/仅看此 Tag）、状态行（智能检查+通道状态合一，点击进连接页） |
-| 实时页 | 开始/暂停/停止/复制/清空图标控制行、速率显示（顶栏小字）、倒序跟随滚动、关键词过滤 |
+| 首页（抓取） | 一键抓取（主按钮 44dp + 复制/清空 40dp 图标）、工具行（搜索+进程+级别+行数下拉）、**快捷芯片行**（只看错误 / 缓冲区多选 main·system·crash·radio·events·all / 启动抓取 / 搜索=过滤⇄高亮）、**启动抓取**（不等进程就绪先收流，检测到启动后继续抓 N 秒，定位「启动点」并可「只看启动后」）、进程包名动态展开输入框（**图标化应用选择器**：应用图标+前台/运行中徽标，数据来自本机 PackageManager 不走 ADB）、点行弹底部详情面板、状态行（智能检查+通道状态合一，点击进连接页） |
+| 实时页 | 开始/暂停/停止/复制/清空图标控制行、速率显示（顶栏小字）、倒序跟随滚动、缓冲区多选 + 只看错误 + 匹配模式芯片、**PID 跟随**（目标应用被杀/重启后自动重建日志流，带防抖）、关键词过滤 |
 | 崩溃页 | 崩溃监控前台服务（specialUse）、崩溃记录列表、堆栈底部面板查看/复制/分享 |
-| 导出页 | 导出为 `.log` 文件（默认后缀 .log）、分享 |
+| 导出页 | 导出为 `.log` 文件（默认后缀 .log）、**缓冲区多选**、分享 |
 | 连接页 | 设备 mDNS 扫描列表（点击即连）、分屏配对三步引导、配对码+配对端口（可选，手动兜底）、手动填写地址、探测通道、重新连接、ADB 公钥查看/写入（root 高级） |
 | 使用方法页 | 三步上手 + 分屏配对两张实拍图示 + 日常使用 + 排障清单 |
-| 设置页 | 状态区（连接/配对状态 + 重新配对/清除连接地址兜底）、外观（深色主题）、诊断（上次崩溃报告/运行日志全屏查看）、关于弹窗 |
-| 启动智能检查 | 首页启动时自动检测：无线调试开关状态 → mDNS 端口自动修正 → 连接结果分级提示（可重试/去连接） |
+| 设置页 | 状态区（连接/配对状态 + 重新配对/清除连接地址兜底）、外观（深色主题）、诊断（上次崩溃报告/运行日志全屏查看）、关于（当前版本 + GitHub 检查更新/下载/安装） |
+| 启动智能检查 | 首页启动时自动检测：无线调试开关状态（独立提示+一键跳开发者选项）→ mDNS 端口自动修正（验证失败回滚原配置，防存档污染）→ 连接结果分级提示（可重试/去连接） |
 
 ---
 
@@ -76,8 +76,9 @@ app/src/main/java/com/loglab/app/
 │   ├── bridge/                       # HostBridge HTTP 通道（备用通道）
 │   ├── connect/StartupCheck.kt       # 启动智能检查状态机
 │   ├── crash/                        # 崩溃解析/存储（CrashParser/CrashStore）
+│   ├── apps/AppInfoProvider.kt       # 应用选择器数据源（PackageManager 图标/名称 + shell 运行/前台状态）
 │   ├── export/LogExporter.kt         # 导出 .log
-│   ├── logcat/                       # LogcatCommand/LogParser/LogPriority/PidResolver
+│   ├── logcat/                       # LogcatCommand(多缓冲区/多PID/buildStartup)/LogParser/LogPriority/PidResolver(resolveAll)
 │   └── report/                       # AppLogger（运行日志）/ CrashReporter（自身崩溃）
 ├── data/
 │   ├── model/AppSettings.kt          # DataStore 偏好（darkTheme/fontSize/adbHost/adbPort/adbPaired…）
@@ -93,7 +94,7 @@ app/src/main/java/com/loglab/app/
     ├── capture/ tail/ crash/ settings/ connect/ guide/ export/ logview/ onboarding/
     └── components/                   # HomeStatusBar(状态行+EllipseTextField) /
                                       # FilterDropdown(胶囊下拉) / LogListView / LogLineSheet /
-                                      # PackagePickerDialog / CopyableText / CfgChip / ChannelBar
+                                      # AppPickerDialog(图标化应用选择器) / CopyableText / CfgChip / ChannelBar
 ```
 
 资源：`res/drawable-nodpi/`（猫头 logo `ic_launcher_foreground.png`、使用方法两张实拍图）；adaptive icon：白底（`values/ic_launcher_background.xml` #FFFFFF）+ PNG 前景。
@@ -166,6 +167,25 @@ app/src/main/java/com/loglab/app/
 `foregroundServiceType="specialUse"` + `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 说明
 （targetSdk 34+ 要求）。通知渠道在各自 Service 内创建。
 
+### 5.7 启动抓取与 PID 跟随（v1.7.0）
+
+**启动抓取**（`LogRepository.captureStartup` + `LogcatCommandBuilder.buildStartup`）：
+抓"App 启动瞬间"的崩溃。刻意不用 `logcat -c`（破坏性，会抹掉上次崩溃现场），
+改用 `logcat -T 1`（只回放最近 1 行并持续跟随，效果等同"从现在开始"）；
+同时每 400ms 轮询 `pgrep -f`/`ps` 等目标进程 PID（`PidResolver.resolveAll`），
+出现后继续抓 `startupTailMs`（默认 5s，UI 可调），返回全窗口行 + 启动点下标，
+UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进程尚未出现）。
+
+**PID 跟随**（`TailSession.watchPid`）：实时页指定包名时，旧 `--pid` 流在应用被杀/
+重启后收不到新日志（表现为"跟踪突然静默"）。`watchPid` 每 2s 轮询 PID 集合，
+需连续两次拿到同一新集合（防 pgrep 启停瞬间抖动）才重建日志流，并插入一行
+「检测到 XX 进程变化」标记。
+
+**多缓冲区**：`LogcatConfig.buffers`（默认 main+crash，crash 是崩溃/ANR 堆栈主战场），
+命令侧逐个 `-b` 拼接（选 all 则只拼 `-b all`，部分 ROM 重复 -b all 会冲突）；
+导出头与 `ExportOptions.buffers` 同步。**多 PID**：`--pid` 多值 + 结果侧按
+`LogEntry.pid` 集合二次过滤兜底（部分 ROM 的 logcat 只认最后一个 --pid）。
+
 ---
 
 ## 6. 构建与发布
@@ -194,7 +214,7 @@ app/src/main/java/com/loglab/app/
 - 签名：`app/keystore/debug.jks`，store/key 密码均 `logcatgrabber`，alias `logcatgrabber`
   （release 直接复用此 keystore，正式发布前建议换正式证书）
 - **版本号约定**：每个功能批次 `versionName +0.1`（bug 修复 +0.01），`versionCode` 恒 +1。
-  当前 v1.6.4 / 14。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
+  当前 v1.7.0 / 15。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
 
 ### 6.4 构建已知坑（沙箱实测，必读）
 
@@ -224,6 +244,10 @@ app/src/main/java/com/loglab/app/
 | 1.5.1 | 9 | 修复崩溃/运行日志/导出文件分享在非 Activity context 下崩溃（chooser 与 target 均补 FLAG_ACTIVITY_NEW_TASK，共 5 处）；logo 重绘：极简剪影猫头，内容占比 65% → ~48%，视觉不再突兀 |
 | 1.6.0 | 10 | ★ 应用内更新 + 开源准备：GitHub Releases 检查/下载/安装（UpdateManager，设置页「关于」入口）；buildConfig 开启；签名支持 CI 环境变量注入；Gradle wrapper 8.9；README/LICENSE(MIT)/.gitignore（keystore 不入库）；.github/workflows/release.yml tag 自动发布；git init（remote: github.com/resooo/loglab） |
 | 1.6.1 | 11 | ★ 修复：无线调试关闭后启动检查误报「已连接」——mDNS 陈旧缓存（幽灵服务）+ 握手成功即判连接；现在所有 Ready/PortUpdated 结论强制 echo 复验（echoOk()），失败即断开并提示「无线调试可能已关闭」 |
+| 1.6.2 | 12 | 无线调试未开启独立提示「无线调试未开启，去开启」，按钮直跳开发者选项；「未配对」与「未开启」分开提示 |
+| 1.6.3 | 13 | 启动检查滞后性修复（幽灵缓存时自动再扫一轮再下结论）；深色主题下状态栏/导航栏图标颜色跟随 App 内主题（SideEffect 同步 isAppearanceLightStatusBars）；设置页删除两处冗余指引文字 |
+| 1.6.4 | 14 | ★ 修复「整体罢工」：mDNS 解析出不可达地址（ENETUNREACH）时新配置先持久化导致存档被污染——现在验证失败必回滚原配置，且候选放宽为「任何与存档不同、同 IP 优先」逐个复验自愈 |
+| 1.7.0 | 15 | ★ 日志精准抓取批次（P1-P3）：多缓冲区默认 main+crash / 多进程多 PID（命令侧 --pid 多值 + 结果侧 PID 集合兜底）/「只看错误」快捷开关 / 搜索=过滤⇄高亮双模式 / **启动抓取**（logcat -T 1 非破坏 + 轮询 pidof 等进程出现 + 启动点定位 + 只看启动后）/ 实时页 **PID 跟随**（应用重启自动重建流）/ **图标化应用选择器**（AppInfoProvider：本机 PackageManager 图标/名称毫秒级 + shell 前台/运行中徽标）；导出页缓冲区多选；首页缓冲区芯片行 |
 
 ---
 

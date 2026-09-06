@@ -22,7 +22,8 @@ data class AppSettings(
     val fontSize: Int = 13,
     val monoFont: Boolean = true,
     val maxLines: Int = 500,
-    val defaultBuffer: LogBuffer = LogBuffer.MAIN,
+    /** 默认缓冲区集合：main + crash（crash 里有崩溃/ANR 堆栈，是抓日志的主战场） */
+    val defaultBuffers: Set<LogBuffer> = setOf(LogBuffer.MAIN, LogBuffer.CRASH),
     val keepScreenOn: Boolean = false,
     val recentPackages: List<String> = emptyList(),
     val onboarded: Boolean = false

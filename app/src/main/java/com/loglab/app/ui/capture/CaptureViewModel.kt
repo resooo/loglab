@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loglab.app.core.apps.AppInfo
+import com.loglab.app.core.apps.AppInfoProvider
 import com.loglab.app.core.channel.ChannelManager
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
@@ -29,6 +31,7 @@ class CaptureViewModel @Inject constructor(
     val channelManager: ChannelManager,
     private val settings: SettingsRepository,
     private val startupCheck: com.loglab.app.core.connect.StartupCheck,
+    val appInfoProvider: AppInfoProvider,
     private val logger: com.loglab.app.core.report.AppLogger
 ) : ViewModel() {
 
@@ -57,9 +60,18 @@ class CaptureViewModel @Inject constructor(
         private set
     var maxLines by mutableStateOf(500)
         private set
-    var buffer by mutableStateOf(LogBuffer.MAIN)
+    /** 缓冲区多选（默认 main + crash：crash 里有崩溃/ANR 堆栈） */
+    var buffers by mutableStateOf(setOf(LogBuffer.MAIN, LogBuffer.CRASH))
         private set
     var clearFirst by mutableStateOf(false)
+        private set
+    /** 只看错误：快捷把级别切到 E（再点一次回到 V） */
+    var errorsOnly by mutableStateOf(false)
+        private set
+    /** 启动抓取模式：不等进程就绪就开始收日志，抓"启动瞬间" */
+    var startupMode by mutableStateOf(false)
+        private set
+    var startupTailSec by mutableStateOf(5)
         private set
 
     val tagFilters = mutableStateListOf<TagFilter>()
@@ -70,25 +82,40 @@ class CaptureViewModel @Inject constructor(
         private set
     var status by mutableStateOf<String?>(null)
         private set
-    var packageSuggestions by mutableStateOf<List<String>>(emptyList())
-        private set
     var pickerVisible by mutableStateOf(false)
         private set
     var lastDurationMs by mutableStateOf(0L)
         private set
 
+    /** 图标化应用选择器 */
+    var apps by mutableStateOf<List<AppInfo>>(emptyList())
+        private set
+    var appsLoading by mutableStateOf(false)
+        private set
+
+    /** 启动抓取结果标记：目标 PID 与启动点下标（-1=未捕获到） */
+    var startupPid by mutableStateOf<Int?>(null)
+        private set
+    var startupIndex by mutableStateOf(-1)
+        private set
+    var startupOnly by mutableStateOf(false)
+        private set
+
+    /** 启动抓取时只展示"启动点之后"的日志（用户可切换回全窗口） */
+    val displayEntries: List<LogEntry>
+        get() = if (startupOnly && startupIndex > 0) entries.drop(startupIndex) else entries
+
     init {
-        // 首次连接完全交给启动智能检查（其内部直连探测即建立连接）：
-        // 不再并发调用 connect()，避免重复探测旧端口与通道状态互相覆盖
         logger.log("UI", "首页初始化")
+        viewModelScope.launch {
+            val saved = settings.current()
+            buffers = saved.defaultBuffers.ifEmpty { setOf(LogBuffer.MAIN, LogBuffer.CRASH) }
+        }
         runStartupCheck("首次进入")
     }
 
     /**
      * 启动智能检查：未配对引导配对 / 端口自动修正 / 连不上提示开无线调试。
-     *
-     * [reason] 仅用于运行日志标注触发来源（首次进入 / 回到前台 / 手动重试），
-     * 便于判断"这次为什么没跑 mDNS"。
      */
     fun runStartupCheck(reason: String = "未标注") {
         if (startupChecking) return
@@ -102,7 +129,6 @@ class CaptureViewModel @Inject constructor(
         }
     }
 
-    /** 清除智能检查提示（成功提示展示数秒后自动隐藏） */
     fun clearStartupResult() {
         startupResult = null
     }
@@ -110,7 +136,6 @@ class CaptureViewModel @Inject constructor(
     fun connect() {
         viewModelScope.launch {
             status = "正在探测通道…"
-            // 容错：任何意外异常都不能让协程崩溃（否则表现为界面打不开/闪退）
             val result = try {
                 channelManager.autoConnect(settings.policyOnce())
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -136,18 +161,40 @@ class CaptureViewModel @Inject constructor(
 
     fun onPriorityChange(value: LogPriority) {
         priority = value
+        errorsOnly = value == LogPriority.ERROR
+    }
+
+    /** 「只看错误」快捷开关：切到 E，再点回到 V */
+    fun toggleErrorsOnly() {
+        errorsOnly = !errorsOnly
+        priority = if (errorsOnly) LogPriority.ERROR else LogPriority.VERBOSE
     }
 
     fun onMaxLinesChange(value: String) {
         maxLines = value.toIntOrNull()?.coerceIn(1, 200_000) ?: 500
     }
 
-    fun onBufferChange(value: LogBuffer) {
-        buffer = value
+    /** 缓冲区多选：至少保留一个（全取消则回落到 main）；顺便记住为默认 */
+    fun toggleBuffer(buffer: LogBuffer) {
+        val next = if (buffer in buffers) buffers - buffer else buffers + buffer
+        buffers = if (next.isEmpty()) setOf(LogBuffer.MAIN) else next
+        viewModelScope.launch { settings.update { it.copy(defaultBuffers = buffers) } }
     }
 
     fun onClearFirstChange(value: Boolean) {
         clearFirst = value
+    }
+
+    fun onStartupModeChange(value: Boolean) {
+        startupMode = value
+    }
+
+    fun onStartupTailChange(sec: Int) {
+        startupTailSec = sec.coerceIn(1, 60)
+    }
+
+    fun toggleStartupOnly() {
+        startupOnly = !startupOnly
     }
 
     fun addTagFilter(prio: LogPriority = LogPriority.DEBUG) {
@@ -164,16 +211,16 @@ class CaptureViewModel @Inject constructor(
 
     fun showPicker(show: Boolean) {
         pickerVisible = show
-        if (show) refreshPackages()
+        if (show) refreshApps()
     }
 
-    fun refreshPackages() {
+    /** 读取本机应用列表（图标/名称来自 PackageManager，运行与前台状态来自 shell） */
+    fun refreshApps() {
         viewModelScope.launch {
-            // 始终全量拉取：过滤交给选择器内的搜索框，避免输入框残留内容导致列表残缺
-            packageSuggestions = repository.listPackages("")
-            if (packageSuggestions.isEmpty()) {
-                packageSuggestions = settings.current().recentPackages
-            }
+            appsLoading = true
+            apps = runCatching { appInfoProvider.load(settings.current().recentPackages) }
+                .getOrDefault(emptyList())
+            appsLoading = false
         }
     }
 
@@ -186,35 +233,67 @@ class CaptureViewModel @Inject constructor(
     fun clearLogs() {
         entries = emptyList()
         status = null
+        startupPid = null
+        startupIndex = -1
+        startupOnly = false
     }
 
     fun capture() {
         if (busy) return
         viewModelScope.launch {
             busy = true
-            status = "抓取中…"
+            startupPid = null
+            startupIndex = -1
+            startupOnly = false
             val startedAt = System.currentTimeMillis()
+            val pkg = packageName.trim().ifBlank { null }
             val config = LogcatConfig(
-                buffer = buffer,
-                pid = null,
+                buffers = buffers,
+                pids = emptyList(),
                 tags = tagFilters.associate { it.tag to it.priority },
                 globalPriority = if (tagFilters.isEmpty()) priority else null,
                 maxLines = maxLines,
                 clearFirst = clearFirst,
                 streaming = false,
-                keywords = parseKeywords(keywordInput)
+                keywords = parseKeywords(keywordInput),
+                startupMode = startupMode,
+                startupTailMs = startupTailSec * 1000L
             )
-            val result = repository.capture(packageName.trim().ifBlank { null }, config)
-            lastDurationMs = System.currentTimeMillis() - startedAt
-            result.onSuccess { list ->
-                entries = list
-                status = "共 ${list.size} 行 · 耗时 ${lastDurationMs}ms"
-                packageName.trim().takeIf { it.isNotBlank() }?.let { pkg ->
-                    settings.rememberPackage(pkg)
+
+            if (startupMode && pkg == null) {
+                status = "启动抓取需要先填目标包名（点「进程 ▸」选择）"
+            } else if (startupMode && pkg != null) {
+                // 启动抓取：先收全量日志，轮询等目标进程出现
+                status = "等待 $pkg 启动…（先收全量日志，不丢启动前现场）"
+                repository.captureStartup(pkg, config) { phase -> status = phase }
+                    .onSuccess { r ->
+                        entries = r.entries
+                        startupPid = r.pid
+                        startupIndex = r.startupIndex
+                        status = if (r.pid != null) {
+                            "启动抓取完成：${r.entries.size} 行 · PID ${r.pid} · 等待 ${r.waitedMs / 1000}s" +
+                                if (r.startupIndex >= 0) " · 启动点第 ${r.startupIndex + 1} 行" else ""
+                        } else {
+                            "未等到 $pkg 启动（已超时），保留窗口内 ${r.entries.size} 行"
+                        }
+                        settings.rememberPackage(pkg)
+                    }
+                    .onFailure { error ->
+                        status = "启动抓取失败：${error.message}"
+                        entries = emptyList()
+                    }
+            } else {
+                status = "抓取中…"
+                val result = repository.capture(pkg, config)
+                lastDurationMs = System.currentTimeMillis() - startedAt
+                result.onSuccess { list ->
+                    entries = list
+                    status = "共 ${list.size} 行 · 耗时 ${lastDurationMs}ms"
+                    pkg?.let { settings.rememberPackage(it) }
+                }.onFailure { error ->
+                    status = "抓取失败：${error.message}"
+                    entries = emptyList()
                 }
-            }.onFailure { error ->
-                status = "抓取失败：${error.message}"
-                entries = emptyList()
             }
             busy = false
         }

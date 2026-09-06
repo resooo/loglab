@@ -19,7 +19,7 @@ import javax.inject.Singleton
 data class ExportOptions(
     val packageName: String? = null,
     val pid: Int? = null,
-    val buffer: LogBuffer = LogBuffer.MAIN,
+    val buffers: Set<LogBuffer> = setOf(LogBuffer.MAIN, LogBuffer.CRASH),
     val keywords: List<String> = emptyList(),
     val channelType: ChannelType? = null,
     val addHeader: Boolean = true,
@@ -82,7 +82,7 @@ class LogExporter @Inject constructor(
         appendLine("# 通道     : ${options.channelType?.name ?: "UNKNOWN"}")
         appendLine("# 包名     : ${options.packageName ?: "(全部)"}")
         appendLine("# PID      : ${options.pid ?: "-"}")
-        appendLine("# 缓冲区   : ${options.buffer.value}")
+        appendLine("# 缓冲区   : ${options.buffers.joinToString(", ") { it.value }.ifBlank { "main" }}")
         if (options.keywords.isNotEmpty()) {
             appendLine("# 关键词   : ${options.keywords.joinToString(", ")}")
         }

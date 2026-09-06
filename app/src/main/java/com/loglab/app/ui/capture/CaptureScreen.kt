@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,13 +65,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.data.model.LogEntry
+import com.loglab.app.ui.components.AppPickerDialog
 import com.loglab.app.ui.components.CopyableText
 import com.loglab.app.ui.components.EllipseTextField
 import com.loglab.app.ui.components.FilterDropdown
 import com.loglab.app.ui.components.HomeStatusBar
 import com.loglab.app.ui.components.LogLineSheet
 import com.loglab.app.ui.components.LogListView
-import com.loglab.app.ui.components.PackagePickerDialog
 
 /**
  * 首页（抓取页）：主按钮 C 位 + 状态一行 + 配置可见。
@@ -91,15 +92,21 @@ fun CaptureScreen(
     val channelState by viewModel.channelState.collectAsState()
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var search by remember { mutableStateOf("") }
+    // true=过滤（只留匹配行）；false=高亮（全留，命中处标黄）
+    var filterMode by remember { mutableStateOf(true) }
     var filtersOpen by remember { mutableStateOf(false) }
     var selectedLine by remember { mutableStateOf<LogEntry?>(null) }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
 
-    val displayed = remember(viewModel.entries, search) {
-        if (search.isBlank()) viewModel.entries
-        else viewModel.entries.filter { it.raw.contains(search, ignoreCase = true) }
+    // 启动抓取模式下默认只展示「启动点之后」的日志，所以显示源用 displayEntries
+    val source = viewModel.displayEntries
+    val displayed = remember(source, search, filterMode) {
+        if (search.isBlank() || !filterMode) source
+        else source.filter { it.raw.contains(search, ignoreCase = true) }
     }
+    // 高亮模式下也要标黄；过滤模式下剩下的行本来就命中，高亮同样有用
+    val highlight = search
 
     Column(modifier = Modifier.fillMaxSize()) {
         // ---- 顶栏：使用方法 + 筛选 + 导出（复制/清空在主按钮行，⋮ 菜单已删）----
@@ -266,6 +273,58 @@ fun CaptureScreen(
                 )
             }
 
+            // ---- 快捷芯片行（横向滚动）：只看错误 / 缓冲区多选 / 启动抓取 / 匹配模式 ----
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = viewModel.errorsOnly,
+                    onClick = viewModel::toggleErrorsOnly,
+                    label = { Text("只看错误", fontSize = 11.sp, maxLines = 1) }
+                )
+                LogBuffer.entries.forEach { buffer ->
+                    FilterChip(
+                        selected = buffer in viewModel.buffers,
+                        onClick = { viewModel.toggleBuffer(buffer) },
+                        label = { Text(buffer.value, fontSize = 11.sp, maxLines = 1) }
+                    )
+                }
+                FilterChip(
+                    selected = viewModel.startupMode,
+                    onClick = { viewModel.onStartupModeChange(!viewModel.startupMode) },
+                    label = { Text("启动抓取", fontSize = 11.sp, maxLines = 1) }
+                )
+                FilterChip(
+                    selected = !filterMode,
+                    onClick = { filterMode = !filterMode },
+                    label = { Text(if (filterMode) "搜索=过滤" else "搜索=高亮", fontSize = 11.sp, maxLines = 1) }
+                )
+            }
+
+            // 启动抓取结果条：定位到启动点后，可一键只看启动之后的日志
+            if (viewModel.startupIndex >= 0) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "启动点：第 ${viewModel.startupIndex + 1} 行" +
+                            (viewModel.startupPid?.let { " · PID $it" } ?: ""),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FilterChip(
+                        selected = viewModel.startupOnly,
+                        onClick = viewModel::toggleStartupOnly,
+                        label = { Text("只看启动后", fontSize = 11.sp, maxLines = 1) }
+                    )
+                }
+            }
+
             // 进程展开行：点「进程 ▸」后才出现，不占常驻空间
             AnimatedVisibility(visible = procOpen) {
                 EllipseTextField(
@@ -290,7 +349,7 @@ fun CaptureScreen(
                 listState = listState,
                 fontSize = settings.fontSize,
                 monoFont = settings.monoFont,
-                highlight = search,
+                highlight = highlight,
                 modifier = Modifier.weight(1f),
                 emptyHint = "连接成功后，点上方按钮即可抓取日志\n首次使用点右上角 ? 查看使用方法",
                 onLineClick = { entry -> selectedLine = entry },
@@ -317,19 +376,26 @@ fun CaptureScreen(
             ) {
                 Text("更多筛选", style = MaterialTheme.typography.titleMedium)
 
-                // 缓冲区：低频配置，从首页工具行收进这里
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("缓冲区", style = MaterialTheme.typography.labelMedium)
-                    LogBuffer.entries.forEach { buffer ->
-                        FilterChip(
-                            selected = viewModel.buffer == buffer,
-                            onClick = { viewModel.onBufferChange(buffer) },
-                            label = { Text(buffer.value) }
+                // 启动抓取：进程出现后继续抓多久（只有开启启动抓取时才有意义）
+                if (viewModel.startupMode) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("启动后继续抓", style = MaterialTheme.typography.labelMedium)
+                        FilterDropdown(
+                            label = "${viewModel.startupTailSec}s",
+                            options = listOf(3, 5, 10, 20, 30),
+                            optionLabel = { "$it 秒" },
+                            isSelected = { viewModel.startupTailSec == it },
+                            onSelect = viewModel::onStartupTailChange
                         )
                     }
+                    Text(
+                        "开启后先点「开始抓取日志」，再启动目标 App；本机会一直等到进程出现。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 Row(
@@ -396,11 +462,13 @@ fun CaptureScreen(
     }
 
     if (viewModel.pickerVisible) {
-        PackagePickerDialog(
-            suggestions = viewModel.packageSuggestions,
+        AppPickerDialog(
+            apps = viewModel.apps,
+            loading = viewModel.appsLoading,
+            provider = viewModel.appInfoProvider,
             onDismiss = { viewModel.showPicker(false) },
             onPick = viewModel::pickPackage,
-            onRefresh = viewModel::refreshPackages
+            onRefresh = viewModel::refreshApps
         )
     }
 }

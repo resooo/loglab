@@ -8,11 +8,15 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loglab.app.core.apps.AppInfo
+import com.loglab.app.core.apps.AppInfoProvider
 import com.loglab.app.core.channel.ChannelManager
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.core.logcat.LogcatConfig
+import com.loglab.app.core.report.AppLogger
 import com.loglab.app.data.model.AppSettings
+import com.loglab.app.data.repository.LogRepository
 import com.loglab.app.data.repository.SettingsRepository
 import com.loglab.app.service.LogTailService
 import com.loglab.app.service.TailSession
@@ -32,7 +36,9 @@ class TailViewModel @Inject constructor(
     val channelManager: ChannelManager,
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
-    private val repository: com.loglab.app.data.repository.LogRepository
+    private val repository: LogRepository,
+    val appInfoProvider: AppInfoProvider,
+    private val logger: AppLogger
 ) : ViewModel() {
 
     val appSettings: StateFlow<AppSettings> = settings.settings
@@ -44,49 +50,71 @@ class TailViewModel @Inject constructor(
     val lines: StateFlow<List<com.loglab.app.data.model.LogEntry>> = tailSession.lines
     val tailState: StateFlow<TailState> = tailSession.state
 
-    var packageName by androidx.compose.runtime.mutableStateOf("")
+    var packageName by mutableStateOf("")
         private set
-    var buffer by androidx.compose.runtime.mutableStateOf(LogBuffer.MAIN)
+    /** 缓冲区多选（默认 main + crash，crash 里有崩溃/ANR 堆栈） */
+    var buffers by mutableStateOf(setOf(LogBuffer.MAIN, LogBuffer.CRASH))
         private set
-    var priority by androidx.compose.runtime.mutableStateOf(LogPriority.VERBOSE)
+    var priority by mutableStateOf(LogPriority.VERBOSE)
         private set
-    var keywordInput by androidx.compose.runtime.mutableStateOf("")
+    var keywordInput by mutableStateOf("")
         private set
-    var paused by androidx.compose.runtime.mutableStateOf(false)
+    var paused by mutableStateOf(false)
         private set
-    var status by androidx.compose.runtime.mutableStateOf<String?>(null)
+    var status by mutableStateOf<String?>(null)
         private set
 
-    /** 应用包名选择器（与首页一致，支持搜索） */
-    var packageSuggestions by androidx.compose.runtime.mutableStateOf<List<String>>(emptyList())
+    /** 只看错误：快捷把级别切到 E（再点一次回到 V） */
+    var errorsOnly by mutableStateOf(false)
         private set
-    var pickerVisible by androidx.compose.runtime.mutableStateOf(false)
+
+    /** 图标化应用选择器（数据来自本机 PackageManager，不走 ADB，毫秒级） */
+    var apps by mutableStateOf<List<AppInfo>>(emptyList())
+        private set
+    var appsLoading by mutableStateOf(false)
+        private set
+    var pickerVisible by mutableStateOf(false)
         private set
 
     init {
         viewModelScope.launch {
             val saved = settings.current()
-            buffer = saved.defaultBuffer
+            buffers = saved.defaultBuffers.ifEmpty { setOf(LogBuffer.MAIN, LogBuffer.CRASH) }
         }
     }
 
     fun onPackageChange(value: String) { packageName = value }
-    fun onBufferChange(value: LogBuffer) { buffer = value }
-    fun onPriorityChange(value: LogPriority) { priority = value }
     fun onKeywordChange(value: String) { keywordInput = value }
+
+    fun onPriorityChange(value: LogPriority) {
+        priority = value
+        errorsOnly = value == LogPriority.ERROR
+    }
+
+    /** 「只看错误」快捷开关：切到 E，再点回到 V */
+    fun toggleErrorsOnly() {
+        errorsOnly = !errorsOnly
+        priority = if (errorsOnly) LogPriority.ERROR else LogPriority.VERBOSE
+    }
+
+    /** 缓冲区多选：至少保留一个（全取消则回落到 main） */
+    fun toggleBuffer(buffer: LogBuffer) {
+        val next = if (buffer in buffers) buffers - buffer else buffers + buffer
+        buffers = if (next.isEmpty()) setOf(LogBuffer.MAIN) else next
+        viewModelScope.launch { settings.update { it.copy(defaultBuffers = buffers) } }
+    }
 
     fun showPicker(show: Boolean) {
         pickerVisible = show
-        if (show) refreshPackages()
+        if (show) refreshApps()
     }
 
-    fun refreshPackages() {
+    fun refreshApps() {
         viewModelScope.launch {
-            // 始终全量拉取：过滤交给选择器内的搜索框，避免输入框残留内容导致列表残缺
-            packageSuggestions = repository.listPackages("")
-            if (packageSuggestions.isEmpty()) {
-                packageSuggestions = settings.current().recentPackages
-            }
+            appsLoading = true
+            apps = runCatching { appInfoProvider.load(settings.current().recentPackages) }
+                .getOrDefault(emptyList())
+            appsLoading = false
         }
     }
 
@@ -97,8 +125,11 @@ class TailViewModel @Inject constructor(
     }
 
     fun start() {
+        if (packageName.isNotBlank()) {
+            status = null
+        }
         val config = LogcatConfig(
-            buffer = buffer,
+            buffers = buffers,
             globalPriority = priority,
             streaming = true,
             maxLines = 0,
@@ -110,9 +141,11 @@ class TailViewModel @Inject constructor(
             putExtra(LogTailService.EXTRA_CONFIG, Json.encodeToString(config))
         }
         runCatching { ContextCompat.startForegroundService(context, intent) }
-            .onFailure { status = "启动失败：${it.message}" }
+            .onFailure {
+                status = "启动失败：${it.message}"
+                logger.log("TAIL", "启动前台服务失败：${it.message}", it)
+            }
         paused = false
-        status = null
         viewModelScope.launch {
             packageName.trim().takeIf { it.isNotBlank() }?.let { settings.rememberPackage(it) }
         }

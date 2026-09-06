@@ -50,7 +50,8 @@ class ExportViewModel @Inject constructor(
         private set
     var maxLines by androidx.compose.runtime.mutableStateOf(5000)
         private set
-    var buffer by androidx.compose.runtime.mutableStateOf(LogBuffer.MAIN)
+    /** 缓冲区多选（默认 main + crash：crash 里有崩溃/ANR 堆栈） */
+    var buffers by androidx.compose.runtime.mutableStateOf(setOf(LogBuffer.MAIN, LogBuffer.CRASH))
         private set
     var priority by androidx.compose.runtime.mutableStateOf(LogPriority.VERBOSE)
         private set
@@ -73,13 +74,20 @@ class ExportViewModel @Inject constructor(
 
     init {
         refreshHistory()
-        viewModelScope.launch { buffer = settings.current().defaultBuffer }
+        viewModelScope.launch {
+            buffers = settings.current().defaultBuffers.ifEmpty { setOf(LogBuffer.MAIN, LogBuffer.CRASH) }
+        }
     }
 
     fun onPackageChange(value: String) { packageName = value }
     fun onFileNameChange(value: String) { fileName = value }
     fun onMaxLinesChange(value: String) { maxLines = value.toIntOrNull()?.coerceIn(0, 500_000) ?: 0 }
-    fun onBufferChange(value: LogBuffer) { buffer = value }
+
+    /** 缓冲区多选：至少保留一个（全取消则回落到 main） */
+    fun toggleBuffer(buffer: LogBuffer) {
+        val next = if (buffer in buffers) buffers - buffer else buffers + buffer
+        buffers = if (next.isEmpty()) setOf(LogBuffer.MAIN) else next
+    }
     fun onPriorityChange(value: LogPriority) { priority = value }
     fun onKeywordChange(value: String) { keywordInput = value }
     fun onAddHeaderChange(value: Boolean) { addHeader = value }
@@ -91,7 +99,7 @@ class ExportViewModel @Inject constructor(
         busy = true
         status = "正在抓取并导出…"
         val config = LogcatConfig(
-            buffer = buffer,
+            buffers = buffers,
             globalPriority = priority,
             maxLines = maxLines,
             streaming = false,

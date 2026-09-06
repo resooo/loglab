@@ -76,6 +76,44 @@ class PidResolver(private val channel: Channel) {
             .firstOrNull { it.isNotEmpty() && it.matches(Regex("\\d+")) && it != "0" }
             ?.toIntOrNull()
 
+    /**
+     * 多进程解析：返回该包名下**所有** PID（主进程 + `:remote` 之类子进程）。
+     * 单进程应用结果只有 1 个；应用未运行返回空列表。
+     */
+    suspend fun resolveAll(packageName: String): List<Int> {
+        if (packageName.isBlank()) return emptyList()
+        // pgrep -f 能一次拿到所有匹配进程（含子进程名），最省事
+        runCatching { channel.execute("pgrep -f $packageName 2>/dev/null") }
+            .getOrNull()
+            ?.getOrNull()
+            ?.lineSequence()
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.filter { it > 0 }
+            ?.distinct()
+            ?.toList()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
+
+        // 回退：ps -A -o PID,NAME | grep 包名（进程名通常等于包名或包名:子进程）
+        runCatching {
+            channel.execute("ps -A -o PID,NAME 2>/dev/null | grep -F -- $packageName")
+        }.getOrNull()
+            ?.getOrNull()
+            ?.lineSequence()
+            ?.mapNotNull { line ->
+                line.trim().split(Regex("\\s+")).firstOrNull()?.toIntOrNull()
+            }
+            ?.filter { it > 0 }
+            ?.distinct()
+            ?.toList()
+            ?.let { if (it.isNotEmpty()) return it }
+
+        // 最后回退到单 PID 链路（pidof 只认主进程，但至少不会全空）
+        return runCatching { resolve(packageName).getOrNull() }.getOrNull()
+            ?.let { listOf(it) }
+            .orEmpty()
+    }
+
     /** 列出已安装第三方包名（用于包名选择弹窗） */
     suspend fun listPackages(keyword: String = ""): List<String> {
         val command = if (keyword.isBlank()) {

@@ -3,6 +3,7 @@ package com.loglab.app.ui.export
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,7 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.ui.components.ChannelBar
 import com.loglab.app.ui.components.EllipseTextField
 import kotlinx.coroutines.launch
@@ -147,6 +151,23 @@ fun ExportScreen(
             placeholder = "逗号分隔",
             leadingLabel = "关键词"
         )
+
+        // 缓冲区多选：默认 main + crash，导出崩溃现场时别漏了 crash
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            LogBuffer.entries.forEach { buffer ->
+                FilterChip(
+                    selected = buffer in viewModel.buffers,
+                    onClick = { viewModel.toggleBuffer(buffer) },
+                    label = { Text(buffer.value, fontSize = 11.sp, maxLines = 1) }
+                )
+            }
+        }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = viewModel.addHeader, onCheckedChange = viewModel::onAddHeaderChange)

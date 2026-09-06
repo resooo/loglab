@@ -1,6 +1,7 @@
 package com.loglab.app.service
 
 import com.loglab.app.core.logcat.LogcatConfig
+import com.loglab.app.core.report.AppLogger
 import com.loglab.app.data.model.LogEntry
 import com.loglab.app.data.repository.LogRepository
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +42,8 @@ data class TailState(
  */
 @Singleton
 class TailSession @Inject constructor(
-    private val repository: LogRepository
+    private val repository: LogRepository,
+    private val logger: AppLogger
 ) {
     companion object {
         const val MAX_BUFFER = 5000
@@ -49,6 +51,8 @@ class TailSession @Inject constructor(
         const val FLUSH_INTERVAL_MS = 100L
         /** 队列积压超过该条数时跳过节流立即刷出，防止延迟无限累积 */
         const val IMMEDIATE_FLUSH = 256
+        /** PID 跟随轮询间隔：目标应用重启后 PID 会变，需要重建日志流 */
+        const val PID_POLL_MS = 2_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -87,11 +91,23 @@ class TailSession @Inject constructor(
         queue = Channel(Channel.UNLIMITED)
 
         job = scope.launch {
+            var producer: Job? = null
             // 生产者：日志流 → 无界队列（trySend 永不阻塞收集循环）
-            val producer = launch {
-                repository.tail(packageName, config).collect { entry ->
-                    if (!paused) queue.trySend(entry)
+            fun startProducer() {
+                producer?.cancel()
+                producer = launch {
+                    repository.tail(packageName, config).collect { entry ->
+                        if (!paused) queue.trySend(entry)
+                    }
                 }
+            }
+            startProducer()
+            // PID 跟随：目标应用被杀/重启/起了子进程后，旧 --pid 流再也收不到它的日志，
+            // 这里定期比对 PID 集合，变了就重建流（否则表现为"跟踪突然静默"）
+            val watcher = if (!packageName.isNullOrBlank()) {
+                launch { watchPid(packageName, ::startProducer) }
+            } else {
+                null
             }
             // 消费者：攒批 + 节流刷新
             val batch = ArrayList<LogEntry>(IMMEDIATE_FLUSH)
@@ -108,7 +124,8 @@ class TailSession @Inject constructor(
                     delay(FLUSH_INTERVAL_MS)
                 }
             } finally {
-                producer.cancel()
+                producer?.cancel()
+                watcher?.cancel()
             }
         }
 
@@ -121,6 +138,39 @@ class TailSession @Inject constructor(
                 counter = 0
                 lastRateCheck = now
                 _state.value = _state.value.copy(ratePerSecond = rate)
+            }
+        }
+    }
+
+    /**
+     * PID 跟随：轮询目标包名的 PID 集合，变化则重建日志流。
+     *
+     * 防抖：需要连续两次轮询拿到同一个"新集合"才重建——pgrep 在进程启停瞬间
+     * 可能给出抖动结果，否则会频繁重启流导致漏日志。
+     */
+    private suspend fun watchPid(packageName: String, restart: () -> Unit) {
+        var last = runCatching { repository.resolvePids(packageName) }.getOrDefault(emptyList())
+        var pending: List<Int>? = null
+        while (true) {
+            delay(PID_POLL_MS)
+            val now = runCatching { repository.resolvePids(packageName) }.getOrDefault(emptyList())
+            if (now.isEmpty() || now.toSet() == last.toSet()) {
+                pending = null
+                continue
+            }
+            if (pending == now) {
+                logger.log("TAIL", "目标进程变化：${last.joinToString(",")} → ${now.joinToString(",")}，重建日志流")
+                queue.trySend(
+                    LogEntry(
+                        raw = "检测到 $packageName 进程变化：PID ${now.joinToString(",")}，已重新跟踪",
+                        tag = "LogLab"
+                    )
+                )
+                last = now
+                pending = null
+                restart()
+            } else {
+                pending = now
             }
         }
     }

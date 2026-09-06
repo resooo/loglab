@@ -1,6 +1,8 @@
 package com.loglab.app.ui.tail
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,13 +53,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.data.model.LogEntry
+import com.loglab.app.ui.components.AppPickerDialog
 import com.loglab.app.ui.components.EllipseTextField
 import com.loglab.app.ui.components.FilterDropdown
 import com.loglab.app.ui.components.HomeStatusBar
 import com.loglab.app.ui.components.LogLineSheet
 import com.loglab.app.ui.components.LogListView
-import com.loglab.app.ui.components.PackagePickerDialog
-import androidx.compose.animation.AnimatedVisibility
 
 /** 实时页渲染层最多显示的行数（数据层全量保留，复制/导出不受影响） */
 private const val TAIL_DISPLAY_LIMIT = 1000
@@ -78,14 +80,17 @@ fun TailScreen(
     val tailState by viewModel.tailState.collectAsState()
     val listState = rememberLazyListState()
     var search by remember { mutableStateOf("") }
+    // true=过滤（只留匹配行）；false=高亮（全留，命中处标黄）
+    var filterMode by remember { mutableStateOf(true) }
     var filtersOpen by remember { mutableStateOf(false) }
     var selectedLine by remember { mutableStateOf<LogEntry?>(null) }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
 
     // 匹配结果全量保留（「复制全部」使用）
-    val matched = remember(lines, search) {
-        if (search.isBlank()) lines else lines.filter { it.raw.contains(search, ignoreCase = true) }
+    val matched = remember(lines, search, filterMode) {
+        if (search.isBlank() || !filterMode) lines
+        else lines.filter { it.raw.contains(search, ignoreCase = true) }
     }
     // 渲染层只显示最近 TAIL_DISPLAY_LIMIT 条并倒序（配合 reverseLayout 贴底跟随）：
     // 数据层 5000 条全量裁剪对 UI 无感，同时把 LazyColumn 的 diff 规模压低，
@@ -218,12 +223,32 @@ fun TailScreen(
                     isSelected = { viewModel.priority == it },
                     onSelect = viewModel::onPriorityChange
                 )
-                FilterDropdown(
-                    label = viewModel.buffer.value,
-                    options = LogBuffer.entries.toList(),
-                    optionLabel = { it.value },
-                    isSelected = { viewModel.buffer == it },
-                    onSelect = viewModel::onBufferChange
+            }
+
+            // ---- 快捷芯片行（横向滚动）：只看错误 / 缓冲区多选 / 匹配模式 ----
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = viewModel.errorsOnly,
+                    onClick = viewModel::toggleErrorsOnly,
+                    label = { Text("只看错误", fontSize = 11.sp, maxLines = 1) }
+                )
+                LogBuffer.entries.forEach { buffer ->
+                    FilterChip(
+                        selected = buffer in viewModel.buffers,
+                        onClick = { viewModel.toggleBuffer(buffer) },
+                        label = { Text(buffer.value, fontSize = 11.sp, maxLines = 1) }
+                    )
+                }
+                FilterChip(
+                    selected = !filterMode,
+                    onClick = { filterMode = !filterMode },
+                    label = { Text(if (filterMode) "搜索=过滤" else "搜索=高亮", fontSize = 11.sp, maxLines = 1) }
                 )
             }
 
@@ -284,6 +309,11 @@ fun TailScreen(
                     placeholder = "关键词，逗号分隔",
                     leadingLabel = "关键词"
                 )
+                Text(
+                    "关键词在设备侧过滤（只回传命中行）；顶部搜索框在本机过滤/高亮，两者可叠加。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -301,11 +331,13 @@ fun TailScreen(
     }
 
     if (viewModel.pickerVisible) {
-        PackagePickerDialog(
-            suggestions = viewModel.packageSuggestions,
+        AppPickerDialog(
+            apps = viewModel.apps,
+            loading = viewModel.appsLoading,
+            provider = viewModel.appInfoProvider,
             onDismiss = { viewModel.showPicker(false) },
             onPick = viewModel::pickPackage,
-            onRefresh = viewModel::refreshPackages
+            onRefresh = viewModel::refreshApps
         )
     }
 }
