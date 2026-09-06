@@ -1,6 +1,6 @@
 # LogLab 项目交接文档
 
-> 版本：v1.6.3（versionCode 13）· 更新日期：2026-09-06
+> 版本：v1.6.4（versionCode 14）· 更新日期：2026-09-07
 > 面向接手开发/维护的工程师。读完本文应能独立完成：环境搭建、构建出包、理解核心链路、继续迭代。
 
 ---
@@ -22,7 +22,7 @@
 
 ---
 
-## 2. 功能清单（v1.6.3）
+## 2. 功能清单（v1.6.4）
 
 | 模块 | 功能 |
 |---|---|
@@ -194,7 +194,7 @@ app/src/main/java/com/loglab/app/
 - 签名：`app/keystore/debug.jks`，store/key 密码均 `logcatgrabber`，alias `logcatgrabber`
   （release 直接复用此 keystore，正式发布前建议换正式证书）
 - **版本号约定**：每个功能批次 `versionName +0.1`（bug 修复 +0.01），`versionCode` 恒 +1。
-  当前 v1.6.3 / 13。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
+  当前 v1.6.4 / 14。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
 
 ### 6.4 构建已知坑（沙箱实测，必读）
 
@@ -257,4 +257,4 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 #    App 首页点状态行 → 连接页 → 按分屏引导配对（详见使用方法页图文）
 ```
 
-有任何与本文冲突的实现细节，以代码为准；本文档对应 v1.6.3（versionCode 13）。
+有任何与本文冲突的实现细节，以代码为准；本文档对应 v1.6.4（versionCode 14）。

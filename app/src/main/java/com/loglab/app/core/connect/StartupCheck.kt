@@ -221,18 +221,27 @@ class StartupCheck @Inject constructor(
         if (matched != null) {
             logger.log("CHECK", "采用服务 ${matched.host}:${matched.port}（tls=${matched.tls}）")
             if (matched.port != cur.adbPort || matched.host != cur.adbHost) {
+                val oldHost = cur.adbHost
                 val oldPort = cur.adbPort
                 settings.update { it.copy(adbHost = matched.host, adbPort = matched.port) }
-                logger.log("CHECK", "端口/地址变化：$oldPort → ${matched.port}，已更新配置并重连")
+                logger.log("CHECK", "端口/地址变化：$oldHost:$oldPort → ${matched.host}:${matched.port}，尝试重连")
                 val conn = runCatching { channelManager.autoConnect(ChannelPolicy.ADB_ONLY) }.getOrNull()
                 return@withContext if (conn?.isSuccess == true && echoOk()) {
-                    logger.log("CHECK", "新端口重连成功（echo 复验通过）")
+                    logger.log("CHECK", "新地址重连成功（echo 复验通过）")
                     StartupCheckResult.PortUpdated(matched.host, oldPort, matched.port)
                 } else {
-                    logger.log("CHECK", "新端口重连失败：${conn?.exceptionOrNull()?.message}")
+                    val why = conn?.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
+                        ?: "握手或命令复验未通过"
+                    // ★ 必须回滚：mDNS 在网络切换/多接口场景会解析出**不可达**地址
+                    //   （真机日志：ENETUNREACH）。不回滚的话不可达地址会覆盖存档，
+                    //   之后每次启动都连它、每次都失败——配置被污染，App 整体"罢工"。
+                    //   原则：验证通过才允许持久化，失败一律退回原配置。
+                    logger.log("CHECK", "新地址重连失败：$why，回滚到原配置 $oldHost:$oldPort")
+                    settings.update { it.copy(adbHost = oldHost, adbPort = oldPort) }
+                    runCatching { channelManager.disconnect() }
                     StartupCheckResult.NotReachable(
-                        "发现服务 ${matched.host}:${matched.port}，但连接失败：" +
-                            (conn?.exceptionOrNull()?.message ?: direct?.exceptionOrNull()?.message)
+                        "发现服务 ${matched.host}:${matched.port} 但无法连接（$why），已保留原配置 " +
+                            "$oldHost:$oldPort；若反复出现，请在设置页「清除连接地址」后重试"
                     )
                 }
             }
@@ -274,32 +283,37 @@ class StartupCheck @Inject constructor(
             logger.log("CHECK", "mDNS 仅报出存档地址（疑为幽灵缓存），自动再扫一轮等待新服务通告")
             // firstOrNull：出现符合条件的快照立即返回（内部取消扫描流）；
             // 整个窗口内都没出现才返回 null。
-            val fresh = runCatching {
-                nsd.discover(MDNS_RESCAN_WINDOW_MS).firstOrNull { snap ->
-                    snap.any {
-                        it.kind != NsdDiscovery.Kind.PAIRING &&
-                            it.host == cur.adbHost && it.port != cur.adbPort
-                    }
-                }?.firstOrNull {
-                    it.kind != NsdDiscovery.Kind.PAIRING &&
-                        it.host == cur.adbHost && it.port != cur.adbPort
-                }
-            }.getOrNull()
-            if (fresh != null) {
+            // 候选=与存档**不同**的服务（IP 或端口任一不同）：存档若已被污染成
+            // 不可达地址，真实地址一定"与存档不同"，不能按 host==存档 过滤，
+            // 否则永远出不了死循环。同 IP 优先尝试。
+            fun isCandidate(d: NsdDiscovery.Device) =
+                d.kind != NsdDiscovery.Kind.PAIRING &&
+                    (d.host != cur.adbHost || d.port != cur.adbPort)
+            val freshList = runCatching {
+                nsd.discover(MDNS_RESCAN_WINDOW_MS)
+                    .firstOrNull { snap -> snap.any { isCandidate(it) } }
+                    ?.filter { isCandidate(it) }
+                    .orEmpty()
+            }.getOrNull().orEmpty()
+            val ordered = freshList.sortedByDescending { it.host == cur.adbHost }
+            if (ordered.isNotEmpty()) {
+                logger.log("CHECK", "mDNS 第 2 轮发现 ${ordered.size} 个新候选：${ordered.format()}")
+            }
+            for (fresh in ordered) {
+                val oldHost = cur.adbHost
                 val oldPort = cur.adbPort
                 settings.update { it.copy(adbHost = fresh.host, adbPort = fresh.port) }
-                logger.log("CHECK", "mDNS 第 2 轮发现新端口 $oldPort → ${fresh.port}，切换并验证")
+                logger.log("CHECK", "尝试切换 $oldHost:$oldPort → ${fresh.host}:${fresh.port}")
                 if (connectVerified()) {
-                    logger.log("CHECK", "第 2 轮新端口验证通过（echo 复验 OK），连接成功")
+                    logger.log("CHECK", "新地址验证通过（echo 复验 OK），连接成功")
                     setPhase("")
                     return@withContext StartupCheckResult.PortUpdated(fresh.host, oldPort, fresh.port)
                 }
-                // 新端口验证失败：回滚到存档端口
-                settings.update { it.copy(adbHost = cur.adbHost, adbPort = oldPort) }
-                logger.log("CHECK", "第 2 轮新端口 ${fresh.port} 验证失败，回滚 $oldPort")
-            } else {
-                logger.log("CHECK", "第 2 轮仍无同 IP 新端口通告，确认无线调试未开启")
+                // 该候选验证失败：回滚，试下一个
+                settings.update { it.copy(adbHost = oldHost, adbPort = oldPort) }
+                logger.log("CHECK", "候选 ${fresh.host}:${fresh.port} 验证失败，已回滚")
             }
+            logger.log("CHECK", "第 2 轮无可用新候选，确认无线调试未开启")
             setPhase("")
             return@withContext StartupCheckResult.DebugOff
         }
