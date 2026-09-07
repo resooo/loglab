@@ -97,8 +97,12 @@ class CrashStore @Inject constructor(
     private fun load(): List<CrashEvent> = runCatching {
         if (!file.exists()) return emptyList()
         val list = json.decodeFromString<List<CrashEvent>>(file.readText())
-        list.forEach { dedupKeys.add(dedupKey(it)) }
-        list
+        // v1.7.1 解析修复迁移：旧解析器产出的"无包名"记录（Native 进程名未提取、
+        // Java 崩溃堆栈被打散只剩 FATAL EXCEPTION 一行）信息残缺，且崩溃监控
+        // 回放 crash buffer 时会以修复后的解析重新入库，旧记录留着只会重复占位
+        val cleaned = list.filter { !it.packageName.isNullOrBlank() }
+        cleaned.forEach { dedupKeys.add(dedupKey(it)) }
+        cleaned
     }.getOrDefault(emptyList())
 
     private fun persist() = runCatching {

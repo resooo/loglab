@@ -315,7 +315,12 @@ private fun CrashRow(
             )
         }
         Text(
-            buildString { append(event.type); append(" · "); append(event.summary) },
+            // 摘要与类型相同时只显示一个，避免「Java 崩溃 · Java 崩溃」
+            if (event.summary.isNotBlank() && event.summary != event.type) {
+                "${event.type} · ${event.summary}"
+            } else {
+                event.type
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
             maxLines = 1,
