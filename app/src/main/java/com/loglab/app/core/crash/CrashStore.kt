@@ -50,6 +50,10 @@ class CrashStore @Inject constructor(
 
     /** 写入一条（最新在前），重复内容自动去重；返回是否真的新增 */
     fun add(event: CrashEvent): Boolean = synchronized(this) {
+        // 只保留当天的崩溃：老崩溃（如第三方 App 每次启动都复现的）
+        // 会在 crash buffer 里反复出现，没有留存价值还刷屏
+        if (!isToday(event.time)) return false
+        pruneOtherDays()
         val key = dedupKey(event)
         if (!dedupKeys.add(key)) return false
         _events.value = (listOf(event) + _events.value).take(MAX_EVENTS)
@@ -58,18 +62,19 @@ class CrashStore @Inject constructor(
         true
     }
 
-    /** 批量写入（历史读取），按时间倒序合并 */
+    /** 批量写入（历史读取），按时间倒序合并；只收当天的 */
     fun addAll(incoming: List<CrashEvent>): Int = synchronized(this) {
         var added = 0
         val merged = _events.value.toMutableList()
         for (ev in incoming.sortedByDescending { it.time }) {
+            if (!isToday(ev.time)) continue
             val key = dedupKey(ev)
             if (!dedupKeys.add(key)) continue
             merged.add(0, ev)
             added++
         }
         if (added > 0) {
-            _events.value = merged.take(MAX_EVENTS)
+            _events.value = merged.filter { isToday(it.time) }.take(MAX_EVENTS)
             persist()
             logger.log("CRASH", "合并历史崩溃：新增 $added 条")
         }
@@ -97,13 +102,23 @@ class CrashStore @Inject constructor(
     private fun load(): List<CrashEvent> = runCatching {
         if (!file.exists()) return emptyList()
         val list = json.decodeFromString<List<CrashEvent>>(file.readText())
-        // v1.7.1 解析修复迁移：旧解析器产出的"无包名"记录（Native 进程名未提取、
-        // Java 崩溃堆栈被打散只剩 FATAL EXCEPTION 一行）信息残缺，且崩溃监控
-        // 回放 crash buffer 时会以修复后的解析重新入库，旧记录留着只会重复占位
-        val cleaned = list.filter { !it.packageName.isNullOrBlank() }
+        // 双重过滤：
+        // 1) 丢掉旧版解析产生的无包名残缺记录（Native 进程名未提取、Java 堆栈被打散），
+        //    崩溃监控回放后会以修复后的解析重新入库；
+        // 2) 只保留当天的崩溃（跨天启动即自动清理历史）
+        val cleaned = list.filter { !it.packageName.isNullOrBlank() && isToday(it.time) }
         cleaned.forEach { dedupKeys.add(dedupKey(it)) }
         cleaned
     }.getOrDefault(emptyList())
+
+    /** 时间格式 yyyy-MM-dd HH:mm:ss，取前 10 位与当天日期比较（同格式字典序即时间序） */
+    private fun isToday(time: String): Boolean = time.take(10) == java.time.LocalDate.now().toString()
+
+    /** 清掉列表里跨天残留的旧记录（监控常驻跨天时兜底） */
+    private fun pruneOtherDays() {
+        val fresh = _events.value.filter { isToday(it.time) }
+        if (fresh.size != _events.value.size) _events.value = fresh
+    }
 
     private fun persist() = runCatching {
         file.writeText(json.encodeToString(_events.value))

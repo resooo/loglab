@@ -99,7 +99,11 @@ class CrashMonitorService : android.app.Service() {
 
             val parser = CrashParser()
             try {
-                channelManager.adbChannel.executeStream("logcat -b crash -v time")
+                // 只从当天 0 点开始回放：crash buffer 会保留开机以来的全部崩溃，
+                // 不加 -T 的话每次开启监控都把几天前的老崩溃重新解析一遍（刷屏且无意义）
+                val today = java.time.LocalDate.now()
+                val since = "%02d-%02d 00:00:00.000".format(today.monthValue, today.dayOfMonth)
+                channelManager.adbChannel.executeStream("logcat -b crash -v time -T \"$since\"")
                     .collect { line ->
                         parser.feed(line)?.let { store.add(it) }
                     }

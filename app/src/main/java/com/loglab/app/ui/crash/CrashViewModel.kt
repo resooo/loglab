@@ -46,7 +46,7 @@ class CrashViewModel @Inject constructor(
     }
 
     /**
-     * 读取开机以来的历史崩溃（logcat -b crash -d 一次性输出）。
+     * 读取历史崩溃（logcat -b crash -d 一次性输出，只取当天的）。
      * 没来得及开着监控就崩溃过的，用这个补抓。
      */
     fun readHistory() {
@@ -58,7 +58,9 @@ class CrashViewModel @Inject constructor(
                     ?: channelManager.autoConnect(settings.policyOnce())
                         .getOrThrow().let { channelManager.active() }
                     ?: error("ADB 未连接")
-                channel.execute("logcat -b crash -d -v time").getOrThrow()
+                val today = java.time.LocalDate.now()
+                val since = "%02d-%02d 00:00:00.000".format(today.monthValue, today.dayOfMonth)
+                channel.execute("logcat -b crash -d -v time -T \"$since\"").getOrThrow()
             }
             output.onSuccess { text ->
                 val parser = CrashParser()

@@ -1,6 +1,6 @@
 # LogLab 项目交接文档
 
-> 版本：v1.7.1（versionCode 16）· 更新日期：2026-09-07
+> 版本：v1.7.2（versionCode 17）· 更新日期：2026-09-07
 > 面向接手开发/维护的工程师。读完本文应能独立完成：环境搭建、构建出包、理解核心链路、继续迭代。
 
 ---
@@ -214,7 +214,7 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 - 签名：`app/keystore/debug.jks`，store/key 密码均 `logcatgrabber`，alias `logcatgrabber`
   （release 直接复用此 keystore，正式发布前建议换正式证书）
 - **版本号约定**：每个功能批次 `versionName +0.1`（bug 修复 +0.01），`versionCode` 恒 +1。
-  当前 v1.7.1 / 16。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
+  当前 v1.7.2 / 17。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
 
 ### 6.4 构建已知坑（沙箱实测，必读）
 
@@ -247,6 +247,7 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 | 1.6.2 | 12 | 无线调试未开启独立提示「无线调试未开启，去开启」，按钮直跳开发者选项；「未配对」与「未开启」分开提示 |
 | 1.6.3 | 13 | 启动检查滞后性修复（幽灵缓存时自动再扫一轮再下结论）；深色主题下状态栏/导航栏图标颜色跟随 App 内主题（SideEffect 同步 isAppearanceLightStatusBars）；设置页删除两处冗余指引文字 |
 | 1.6.4 | 14 | ★ 修复「整体罢工」：mDNS 解析出不可达地址（ENETUNREACH）时新配置先持久化导致存档被污染——现在验证失败必回滚原配置，且候选放宽为「任何与存档不同、同 IP 优先」逐个复验自愈 |
+| 1.7.2 | 17 | ★ 崩溃页只看当天：监控回放与历史读取加 `-T 当天0点`，CrashStore 入库/加载/常驻跨天三处过滤非当天记录——老崩溃（如第三方 App 每次启动复现的）不再刷屏；确认 com.logcat.monitor 是设备上另一抓日志 App 因缺 FOREGROUND_SERVICE_SPECIAL_USE 权限反复崩，与 LogLab 无关 |
 | 1.7.1 | 16 | ★ 修复崩溃页解析：Native 崩溃包名从 `tid/pid (进程名)` 提取（旧版硬编码 null 全显示「未知应用」）；Java 崩溃堆栈聚合（AndroidRuntime 逐行独立 log，旧版被拆散只剩 FATAL EXCEPTION 一行，Process: 包名/异常类名全丢）；摘要兜底线程名，不再「Java 崩溃 · Java 崩溃」；加载时丢弃旧无包名残缺记录，监控回放后重新入库 |
 | 1.7.0 | 15 | ★ 日志精准抓取批次（P1-P3）：多缓冲区默认 main+crash / 多进程多 PID（命令侧 --pid 多值 + 结果侧 PID 集合兜底）/「只看错误」快捷开关 / 搜索=过滤⇄高亮双模式 / **启动抓取**（logcat -T 1 非破坏 + 轮询 pidof 等进程出现 + 启动点定位 + 只看启动后）/ 实时页 **PID 跟随**（应用重启自动重建流）/ **图标化应用选择器**（AppInfoProvider：本机 PackageManager 图标/名称毫秒级 + shell 前台/运行中徽标）；导出页缓冲区多选；首页缓冲区芯片行 |
 
