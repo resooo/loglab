@@ -42,9 +42,15 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
+      - name: Rename APK
+        run: |
+          # 附件命名：LogLab_v<版本>.apk（版本取自触发构建的 tag）
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/LogLab_${GITHUB_REF_NAME}.apk"
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: dist/LogLab_*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
