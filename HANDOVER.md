@@ -192,10 +192,11 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 
 ### 6.1 环境要求
 
-- JDK 17（`gradle.properties` 已写死 `org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64`，
-  其他环境需改掉这行或对齐路径）
+- JDK 17（机器特定属性已移入本机 `~/.gradle/gradle.properties`，项目
+  `gradle.properties` 只保留通用配置，CI 直接可用）
 - Android SDK：platform 35 + **build-tools 34.0.0**（`buildToolsVersion` 已锁定；
-  `android.builder.sdkDownload=false` 禁止 AGP 联网下载，其他环境可删）
+  沙箱环境在本机 `~/.gradle/gradle.properties` 中设 `android.builder.sdkDownload=false`
+  禁止 AGP 联网下载，其他环境无需设置）
 - Gradle 8.9（或 `./gradlew` 若补 wrapper——当前仓库**没有 wrapper**，用系统 gradle）
 
 ### 6.2 构建命令
