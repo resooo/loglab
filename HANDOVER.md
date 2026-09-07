@@ -211,7 +211,9 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 
 ### 6.3 签名与版本号
 
-- 签名：`app/keystore/debug.jks`，store/key 密码均 `logcatgrabber`，alias `logcatgrabber`
+- 签名：凭据从源码移除，来源优先级为 CI 环境变量（GitHub Actions secrets：
+  `KS_FILE`/`KS_PASS`/`KEY_ALIAS`/`KEY_PASS`）> 根目录 `keystore.properties`
+  （不入库）> Android 标准 debug keystore。见 `app/build.gradle.kts` 的 `signingConfigs`
   （release 直接复用此 keystore，正式发布前建议换正式证书）
 - **版本号约定**：每个功能批次 `versionName +0.1`（bug 修复 +0.01），`versionCode` 恒 +1。
   当前 v1.7.2 / 17。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
