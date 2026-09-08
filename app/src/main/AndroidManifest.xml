@@ -85,6 +85,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 应用内语言切换：autoStoreLocales 由 AppCompat 自动持久化所选语言，
+             冷启动自动应用，无需自行存档（Android 13+ 亦同步系统 per-app locale） -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
     </application>
 
 </manifest>
