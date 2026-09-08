@@ -50,10 +50,10 @@ class CrashStore @Inject constructor(
 
     /** 写入一条（最新在前），重复内容自动去重；返回是否真的新增 */
     fun add(event: CrashEvent): Boolean = synchronized(this) {
-        // 只保留当天的崩溃：老崩溃（如第三方 App 每次启动都复现的）
+        // 只保留近 7 天的崩溃：更早的老崩溃（如第三方 App 每次启动都复现的）
         // 会在 crash buffer 里反复出现，没有留存价值还刷屏
-        if (!isToday(event.time)) return false
-        pruneOtherDays()
+        if (!isWithinDays(event.time, RETENTION_DAYS)) return false
+        pruneOld()
         val key = dedupKey(event)
         if (!dedupKeys.add(key)) return false
         _events.value = (listOf(event) + _events.value).take(MAX_EVENTS)
@@ -62,19 +62,19 @@ class CrashStore @Inject constructor(
         true
     }
 
-    /** 批量写入（历史读取），按时间倒序合并；只收当天的 */
+    /** 批量写入（历史读取），按时间倒序合并；只收近 7 天的 */
     fun addAll(incoming: List<CrashEvent>): Int = synchronized(this) {
         var added = 0
         val merged = _events.value.toMutableList()
         for (ev in incoming.sortedByDescending { it.time }) {
-            if (!isToday(ev.time)) continue
+            if (!isWithinDays(ev.time, RETENTION_DAYS)) continue
             val key = dedupKey(ev)
             if (!dedupKeys.add(key)) continue
             merged.add(0, ev)
             added++
         }
         if (added > 0) {
-            _events.value = merged.filter { isToday(it.time) }.take(MAX_EVENTS)
+            _events.value = merged.filter { isWithinDays(it.time, RETENTION_DAYS) }.take(MAX_EVENTS)
             persist()
             logger.log("CRASH", "合并历史崩溃：新增 $added 条")
         }
@@ -105,18 +105,23 @@ class CrashStore @Inject constructor(
         // 双重过滤：
         // 1) 丢掉旧版解析产生的无包名残缺记录（Native 进程名未提取、Java 堆栈被打散），
         //    崩溃监控回放后会以修复后的解析重新入库；
-        // 2) 只保留当天的崩溃（跨天启动即自动清理历史）
-        val cleaned = list.filter { !it.packageName.isNullOrBlank() && isToday(it.time) }
+        // 2) 只保留近 7 天的崩溃（跨天启动即自动清理过期记录）
+        val cleaned = list.filter { !it.packageName.isNullOrBlank() && isWithinDays(it.time, RETENTION_DAYS) }
         cleaned.forEach { dedupKeys.add(dedupKey(it)) }
         cleaned
     }.getOrDefault(emptyList())
 
-    /** 时间格式 yyyy-MM-dd HH:mm:ss，取前 10 位与当天日期比较（同格式字典序即时间序） */
-    private fun isToday(time: String): Boolean = time.take(10) == java.time.LocalDate.now().toString()
+    /** 时间格式 yyyy-MM-dd HH:mm:ss，取前 10 位与日期比较（同格式字典序即时间序）：
+     *  1 天内 = 当天；7 天 = 含今天在内的最近 7 天 */
+    private fun isWithinDays(time: String, days: Int): Boolean {
+        val date = time.take(10)
+        val oldest = java.time.LocalDate.now().minusDays((days - 1).toLong()).toString()
+        return date >= oldest && date <= java.time.LocalDate.now().toString()
+    }
 
-    /** 清掉列表里跨天残留的旧记录（监控常驻跨天时兜底） */
-    private fun pruneOtherDays() {
-        val fresh = _events.value.filter { isToday(it.time) }
+    /** 清掉列表里超出保留期的旧记录（监控常驻跨天时兜底） */
+    private fun pruneOld() {
+        val fresh = _events.value.filter { isWithinDays(it.time, RETENTION_DAYS) }
         if (fresh.size != _events.value.size) _events.value = fresh
     }
 
@@ -129,5 +134,8 @@ class CrashStore @Inject constructor(
     private companion object {
         const val FILE_NAME = "crash_reports.json"
         const val MAX_EVENTS = 200
+
+        /** 崩溃记录保留窗口（天）：今天 + 前 6 天 */
+        const val RETENTION_DAYS = 7
     }
 }
