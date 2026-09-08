@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.LogLab" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- AppCompatActivity 要求 AppCompat 系主题（语言切换/per-app locale 依赖它）；
+         页面视觉完全由 Compose MaterialTheme 接管，这里的主题只做窗口底色 -->
+    <style name="Theme.LogLab" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
