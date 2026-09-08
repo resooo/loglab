@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_adb">ADB Direct</string>
+    <string name="notification_channel_name">Live log tailing</string>
+    <string name="notification_channel_desc">Shows the app being tailed and captured line count</string>
+    <string name="tail_notification_title">Tailing logs</string>
+
+    <!-- ============ Bottom navigation ============ -->
+    <string name="tab_capture">Capture</string>
+    <string name="tab_crash">Crashes</string>
+    <string name="tab_tail">Live</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- ============ Common ============ -->
+    <string name="copy">Copy</string>
+    <string name="clear">Clear</string>
+    <string name="share">Share</string>
+    <string name="more">More</string>
+
+    <!-- ============ Capture ============ -->
+    <string name="cd_guide">Guide</string>
+    <string name="cd_filter">More filters</string>
+    <string name="cd_export">Export logs</string>
+    <string name="capture_start">Start capture</string>
+    <string name="capture_running">Capturing…</string>
+    <string name="cd_copy_all">Copy all</string>
+    <string name="cd_clear_logs">Clear logs</string>
+    <string name="errors_only">Errors</string>
+    <string name="startup_capture">On-launch</string>
+    <string name="search_as_filter">Search=filter</string>
+    <string name="search_as_highlight">Search=highlight</string>
+    <string name="search_hint">Search logs…</string>
+    <string name="process">Proc</string>
+    <string name="startup_point_line">Startup point: line %1$d</string>
+    <string name="startup_only_after">After startup</string>
+    <string name="update_banner">New version v%1$s available — tap to view</string>
+    <string name="empty_capture_hint">Once connected, tap the button above to capture logs.\nFirst time? Tap ? in the top bar for the guide</string>
+
+    <!-- ============ Live tail ============ -->
+    <string name="tail_rate_fmt">%1$d lines · %2$.1f lines/s</string>
+    <string name="tail_start">Start tailing</string>
+    <string name="tail_running">Tailing…</string>
+    <string name="tail_pause">Pause</string>
+    <string name="tail_resume">Resume</string>
+    <string name="tail_stop">Stop</string>
+    <string name="tail_clear">Clear</string>
+    <string name="tail_copied_lines_fmt">Copied %1$d lines</string>
+    <string name="tail_search_hint">Search live logs…</string>
+    <string name="process_hint">Package name; empty = all processes</string>
+    <string name="cd_pick_package">Pick package</string>
+    <string name="tail_waiting">Waiting for logs…</string>
+    <string name="tail_tap_start">Tap "Start tailing"</string>
+    <string name="tail_keywords_label">Keywords</string>
+    <string name="tail_keywords_hint">Keywords, comma-separated</string>
+    <string name="tail_keywords_note">Keywords filter on-device (only matching lines are returned); the top search box filters/highlights locally. Both can be combined.</string>
+    <string name="tail_copied_line">Line copied</string>
+
+    <!-- ============ Status bar (capture / tail) ============ -->
+    <string name="status_checking">Checking ADB connection…</string>
+    <string name="connected_short">Connected</string>
+    <string name="status_go_enable">Enable</string>
+    <string name="status_go_connect">Connect</string>
+    <string name="status_retry">Retry</string>
+
+    <!-- ============ Crashes ============ -->
+    <string name="cd_stop_monitor">Stop monitoring</string>
+    <string name="cd_start_monitor">Start monitoring</string>
+    <string name="cd_read_history">Read crash history</string>
+    <string name="crash_range_today">Today</string>
+    <string name="crash_range_7d">Last 7 days</string>
+    <string name="crash_monitoring">Monitoring for crashes</string>
+    <string name="crash_not_monitoring">Monitoring off</string>
+    <string name="crash_start">Start crash monitoring</string>
+    <string name="crash_guide_1">1. Tap "Start crash monitoring"</string>
+    <string name="crash_guide_2">2. Open the crashing app and let it crash once</string>
+    <string name="crash_guide_3">3. Come back here — crashes appear in the list</string>
+    <string name="crash_guide_history">Crashed before monitoring started? Tap ⏱ in the top bar to fetch history</string>
+    <string name="crash_monitor_hint">Open the crashing app and let it crash; come back to this page to see it.</string>
+    <string name="crash_stop">Stop monitoring</string>
+    <string name="crash_count">%1$d crashes captured</string>
+    <string name="crash_empty_list">No crash records yet</string>
+    <string name="crash_empty_monitoring">No crashes captured yet — go reproduce one</string>
+    <string name="crash_copy_stack">Copy stack</string>
+    <string name="crash_copied">Stack copied</string>
+    <string name="crash_cleared">Cleared</string>
+    <string name="crash_menu_clear">Clear records</string>
+    <string name="cd_app_icon">App icon</string>
+
+    <!-- ============ Settings ============ -->
+    <string name="section_status">Status</string>
+    <string name="connected_fmt">Connected · %1$s</string>
+    <string name="disconnected">Not connected</string>
+    <string name="paired">Paired (keys stored on this device)</string>
+    <string name="unpaired">Not paired</string>
+    <string name="reset_pairing">Reset pairing</string>
+    <string name="clear_address">Clear address</string>
+    <string name="toast_reset_pairing">Pairing reset: on the home screen tap the status row → Connect page to pair again</string>
+    <string name="toast_clear_address">Address cleared; the next connection will re-scan</string>
+    <string name="section_appearance">Appearance</string>
+    <string name="dark_theme">Dark theme</string>
+    <string name="language">Language / 语言</string>
+    <string name="lang_follow_system">System</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_en">English</string>
+    <string name="section_diagnostics">Diagnostics</string>
+    <string name="last_crash_report">Last crash report</string>
+    <string name="toast_copied_crash_report">Crash report copied</string>
+    <string name="run_log">Runtime log</string>
+    <string name="no_log_yet">(no logs yet)</string>
+    <string name="cd_view_log">View runtime log</string>
+
+    <!-- ============ About ============ -->
+    <string name="section_about">About</string>
+    <string name="current_version_fmt">Version %1$s</string>
+    <string name="up_to_date">Up to date</string>
+    <string name="update_available_fmt">New version %1$s found — tap "Check updates" for details</string>
+    <string name="downloading_fmt">Downloading %1$d%%</string>
+    <string name="downloaded_ready">Update package ready — tap "Check updates" to install</string>
+    <string name="check_update">Check updates</string>
+    <string name="checking">Checking…</string>
+    <string name="about_loglab">About LogLab</string>
+    <string name="about_desc">A log capture tool with built-in ADB wireless debugging: no root, no PC, no cable — capture your phone\'s logs right on the phone.</string>
+    <string name="about_features">Log capture · Live tailing · One-tap export · Crash monitoring</string>
+    <string name="about_tech">Tech: embedded ADB protocol (Kadb TLS wireless pairing); supports ADB direct and HostBridge channels.</string>
+    <string name="about_open_source">Open source (GitHub)</string>
+    <string name="about_bug_feedback">Bug feedback</string>
+    <string name="about_privacy_hint">Note: captured logs may contain sensitive information — review before sharing.</string>
+    <string name="built_by_prefix">This app is built with </string>
+    <string name="built_by_suffix"></string>
+    <string name="taixu">Taixu</string>
+
+    <!-- ============ Update dialog ============ -->
+    <string name="no_release_notes">(no release notes)</string>
+    <string name="apk_size_fmt">Package %1$s (%2$.1f MB)</string>
+    <string name="download_update">Download update</string>
+    <string name="later">Later</string>
+    <string name="downloading_update">Downloading update</string>
+    <string name="download_progress_fmt">%1$d%% · come back here to install when done</string>
+    <string name="background_continue">Continue in background</string>
+    <string name="update_downloaded_title">Update downloaded</string>
+    <string name="update_downloaded_body">Tap "Install" to launch the system installer. If installation is blocked, allow LogLab to "install unknown apps" in system settings first.</string>
+    <string name="install">Install</string>
+    <string name="install_later">Install later</string>
+
+    <!-- ============ v1.8.2 Startup check results / phases ============ -->
+    <string name="check_phase_connecting">Connecting to %1$s:%2$d…</string>
+    <string name="check_phase_dead_port">Port not responding; scanning for wireless debugging…</string>
+    <string name="check_phase_check_port">Connected; checking whether the port is up to date…</string>
+    <string name="check_phase_verifying">Verifying %1$s:%2$d…</string>
+    <string name="check_phase_trying">Trying %1$s:%2$d…</string>
+    <string name="check_phase_scanning">Scanning for wireless debugging…</string>
+    <string name="check_phase_waiting">Waiting for the wireless debugging service to appear…</string>
+    <string name="status_ready_fmt">ADB connected %1$s:%2$d</string>
+    <string name="status_port_updated_fmt">Wireless debugging port changed (%1$d → %2$d); updated and reconnected automatically</string>
+    <string name="status_need_pairing">Wireless debugging pairing not completed: open "Settings → Developer options → Wireless debugging → Pair device with pairing code", then pair in the app settings page</string>
+    <string name="status_debug_off">Wireless debugging is off — tap to enable</string>
+    <string name="status_not_reachable">Paired but cannot connect; make sure "Wireless debugging" is on</string>
+    <string name="status_scan_none">No debugging port found; make sure wireless debugging is on!</string>
+    <string name="status_scan_resolve_fmt">No debugging port found; make sure wireless debugging is on! (mDNS found %1$d services but address resolution failed — system mDNS is restricted; enter IP:port manually on the connect page)</string>
+    <string name="status_scan_startfail_fmt">No debugging port found; make sure wireless debugging is on! (mDNS scan failed to start: %1$s; enter IP:port manually on the connect page)</string>
+    <string name="status_scan_noresult">No debugging port found; make sure wireless debugging is on! (mDNS scan returned nothing — if the switch is on, the system may restrict mDNS; enter IP:port manually on the connect page)</string>
+    <string name="status_found_cant_connect_fmt">Found %1$d wireless debugging services but cannot connect; direct probe: %2$s</string>
+    <string name="status_found_cant_connect_plain">Found %1$d wireless debugging services but cannot connect</string>
+
+    <!-- ============ v1.8.2 Connect page ============ -->
+    <string name="connect_title">Connect device</string>
+    <string name="cd_back">Back</string>
+    <string name="rescan">Rescan</string>
+    <string name="scanning_fmt">Scanning…</string>
+    <string name="collapse_pairing">Hide pairing</string>
+    <string name="re_pair">Pair again</string>
+    <string name="paired_not_connected">Paired, but not connected</string>
+    <string name="not_paired_short">Not paired yet</string>
+    <string name="pair_suggest_split">Tip: pair in split-screen/floating window — no app switching in between, so the pairing code is not refreshed</string>
+    <string name="pair_step1">First float this app: long-press it in Recents → "Freeform" (or drag it out of the sidebar)</string>
+    <string name="pair_step2">On the main screen open "Developer options → Wireless debugging → Pair device with pairing code"</string>
+    <string name="pair_step3">Type the code shown on the main screen below → Start pairing (keep the system dialog open)</string>
+    <string name="pair_code_label">Pairing code</string>
+    <string name="pair_code_hint">Pairing code, e.g. 739 512</string>
+    <string name="pair_port_hint">Port (optional)</string>
+    <string name="pair_port_note">The port is usually detected automatically; if not, type the port shown in the pairing dialog (e.g. 43185).</string>
+    <string name="pairing_fmt">Pairing…</string>
+    <string name="start_pairing">Start pairing</string>
+    <string name="scan_nearby">Scan nearby devices</string>
+    <string name="fold_manual">Manual address (use when scanning fails)</string>
+    <string name="manual_note">Type the IP:port shown on the "Wireless debugging" screen (different from the pairing port; it changes every time you toggle it).</string>
+    <string name="host_label">Host</string>
+    <string name="port_label">Port</string>
+    <string name="fold_tools">Connection tools</string>
+    <string name="probing_fmt">Probing…</string>
+    <string name="probe_channel">Probe channel</string>
+    <string name="reconnect">Reconnect</string>
+    <string name="fold_pubkey">ADB public key (advanced)</string>
+    <string name="cd_copy_pubkey">Copy public key</string>
+    <string name="install_key">Write to device adb_keys (root required)</string>
+    <string name="scan_start">Scanning nearby wireless debugging devices…</string>
+    <string name="scan_none_hint">No devices found. Some ROMs (e.g. ColorOS) disable scanning — expand "Manual address" and type the IP:port shown on the Wireless debugging screen</string>
+    <string name="scan_found_fmt">Found %1$d services — tap the "Wireless debugging" one to connect; pairing port auto-filled</string>
+    <string name="pairing_port_only_fmt">%1$s:%2$d is a pairing port, for one-time pairing only and cannot capture logs; pick the "Wireless debugging" one instead</string>
+    <string name="scan_connected_fmt">Connected to 127.0.0.1:%1$d</string>
+    <string name="scan_connected_fallback_fmt">Connected to %1$s:%2$d (loopback failed; fell back to the LAN address)</string>
+    <string name="connect_failed_fmt">Entered 127.0.0.1:%1$d but connection failed: %2$s</string>
+    <string name="confirm_adb_on">make sure wireless debugging is on</string>
+    <string name="probe_ok">ADB: available</string>
+    <string name="probe_unavailable_plain">ADB: unavailable — make sure wireless debugging is on</string>
+    <string name="probe_unavailable_err_fmt">ADB: unavailable: %1$s</string>
+    <string name="pair_detecting_port">Detecting the pairing port… (make sure the system "Pair device with pairing code" dialog is open)</string>
+    <string name="pair_port_not_found">Could not detect the pairing port automatically (some systems restrict mDNS): type the port from the pairing dialog "IP address and port" into "Port (optional)" and tap "Start pairing" again</string>
+    <string name="pair_need_6">Enter the 6-digit pairing code</string>
+    <string name="pairing_now">Pairing…</string>
+    <string name="pair_success_connected_fmt">Paired · connected (%1$s:%2$d)</string>
+    <string name="pair_success_connect_failed_fmt">Paired, but connection failed: %1$s</string>
+    <string name="key_writing">Writing public key…</string>
+    <string name="key_written">Key written; restart adbd and reconnect</string>
+    <string name="key_write_failed_fmt">Write failed: %1$s</string>
+
+    <!-- ============ v1.8.2 Guide page ============ -->
+    <string name="guide_title">How to use</string>
+    <string name="guide_sec1">Start capturing · 3 steps</string>
+    <string name="guide_s1_1">Open "Settings → Developer options → Wireless debugging" and keep it on</string>
+    <string name="guide_s1_2">Tap the status bar on top to open the connect page; pair in split-screen: long-press this app in Recents → "Freeform" to float it, then open "Pair device with pairing code" on the main screen</string>
+    <string name="guide_s1_3">Type the code shown on the main screen into the floating window → Start pairing (port auto-detected; pairing happens only once)</string>
+    <string name="guide_s1_tip">Note: leaving the app or closing the dialog during pairing refreshes both the code and the port — split-screen avoids this.</string>
+    <string name="guide_sec2">Split-screen pairing · illustrated</string>
+    <string name="guide_img1">① Type the pairing code in the floating window (right); keep the pairing dialog open on the main screen</string>
+    <string name="guide_img2">② Connected automatically after pairing; daily capture does not need pairing again</string>
+    <string name="guide_sec3">Daily use (after pairing)</string>
+    <string name="guide_s3_1">Turn on "Wireless debugging"</string>
+    <string name="guide_s3_2">Open this app — it connects automatically and tracks port changes; no manual edits needed</string>
+    <string name="guide_s3_3">After capture: ⋮ copy all / 💾 save to file</string>
+    <string name="guide_s3_tip">"Wireless debugging" is just a switch: turn it off when idle and back on when needed.</string>
+    <string name="guide_sec4">Capture app crashes</string>
+    <string name="guide_s4_1">Switch to the "Crashes" tab and tap "Start monitoring"</string>
+    <string name="guide_s4_2">Open the app that crashes and let it crash once</string>
+    <string name="guide_s4_3">Back on "Crashes", records and stack traces appear automatically — copy or share them</string>
+    <string name="guide_sec5">Cannot connect? Try in order</string>
+    <string name="guide_s5_1">Make sure the "Wireless debugging" switch is on (the most common cause)</string>
+    <string name="guide_s5_2">Tap the status bar on the home screen → Connect device → "Rescan"</string>
+    <string name="guide_s5_3">Still failing: expand "Manual address" and type the IP:port from the Wireless debugging screen</string>
+    <string name="guide_s5_tip">The first connection requires pairing once; after that, port changes do not need re-pairing.</string>
+    <string name="guide_privacy">Note: captured logs may contain sensitive info (accounts, locations, etc.). Review before sharing.</string>
+
+    <!-- ============ v1.8.2 Log detail / app picker / stats ============ -->
+    <string name="log_copy_raw">Copy raw</string>
+    <string name="log_filter_tag">Filter by this tag</string>
+    <string name="picker_title">Select app</string>
+    <string name="picker_search_hint">Search app name or package…</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="picker_loading">Loading app list…</string>
+    <string name="picker_count_fmt">%1$d / %2$d apps (foreground/running first)</string>
+    <string name="picker_empty">No app list; make sure the device is connected and tap "Refresh" to retry</string>
+    <string name="picker_no_match_fmt">No apps matching "%1$s"</string>
+    <string name="picker_refresh">Refresh</string>
+    <string name="picker_close">Close</string>
+    <string name="badge_fg">Foreground</string>
+    <string name="badge_running">Running</string>
+    <string name="picker_system_suffix">" · system"</string>
+    <string name="capture_stats_fmt">%1$d lines · %2$d ms</string>
+    <string name="capture_fail_adb_off">Capture failed: connection refused — wireless debugging may be off; enable it and retry</string>
+</resources>
