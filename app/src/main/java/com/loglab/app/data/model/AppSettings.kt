@@ -26,5 +26,7 @@ data class AppSettings(
     val defaultBuffers: Set<LogBuffer> = setOf(LogBuffer.MAIN, LogBuffer.CRASH),
     val keepScreenOn: Boolean = false,
     val recentPackages: List<String> = emptyList(),
-    val onboarded: Boolean = false
+    val onboarded: Boolean = false,
+    /** 上次自动检查更新的时间戳（ms）；24h 节流用，0=从未检查 */
+    val lastUpdateCheck: Long = 0
 )
