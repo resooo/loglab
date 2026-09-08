@@ -27,7 +27,7 @@ class AdbKeyStore(context: Context) {
         private const val KEY_SIZE = 2048
         private const val RSA_WORDS = KEY_SIZE / 32 // 64 个 uint32
         private val MASK32 = BigInteger.valueOf(0xFFFFFFFFL)
-        private const val COMMENT = " logcat-grabber@android"
+        private const val COMMENT = " LogLab@android"
     }
 
     private val appContext = context.applicationContext
