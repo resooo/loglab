@@ -145,7 +145,11 @@ dependencies {
     // 一旦排除，Gradle 依赖树里仍显示 coroutines 存在，但没有任何 jar 被打进 dex，
     // 运行时会抛 ClassNotFoundException: kotlinx.coroutines.flow.StateFlowKt。
     // 版本统一交给下面的 resolutionStrategy 处理。
-    implementation("com.flyfishxu:kadb-android:1.3.0")
+    implementation("com.flyfishxu:kadb-android:1.3.0") {
+        // spake2-java 仅存在于 JitPack，CI 按需构建常超时，改用本地 jar
+        exclude(group = "com.github.Flyfish233", module = "spake2-java")
+    }
+    implementation(files("libs/spake2-java-1.0.5.jar"))
 
     // ---- Networking / serialization ----
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
