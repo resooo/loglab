@@ -45,11 +45,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.loglab.app.R
+import com.loglab.app.core.connect.CheckPhase
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.data.model.LogEntry
@@ -86,12 +89,15 @@ fun TailScreen(
     var selectedLine by remember { mutableStateOf<LogEntry?>(null) }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
+    // stringResource 不能在 onClick / 回调（非 Composable 上下文）里调用，提前取好
+    val copiedLineText = stringResource(R.string.tail_copied_line)
 
     // 匹配结果全量保留（「复制全部」使用）
     val matched = remember(lines, search, filterMode) {
         if (search.isBlank() || !filterMode) lines
         else lines.filter { it.raw.contains(search, ignoreCase = true) }
     }
+    val copiedLinesText = stringResource(R.string.tail_copied_lines_fmt, matched.size)
     // 渲染层只显示最近 TAIL_DISPLAY_LIMIT 条并倒序（配合 reverseLayout 贴底跟随）：
     // 数据层 5000 条全量裁剪对 UI 无感，同时把 LazyColumn 的 diff 规模压低，
     // 高频日志下不再卡顿/闪退
@@ -102,9 +108,9 @@ fun TailScreen(
         TopAppBar(
             title = {
                 Column {
-                    Text("实时")
+                    Text(stringResource(R.string.tab_tail))
                     Text(
-                        "已捕获 ${displayed.size} 行 · %.1f 行/秒".format(tailState.ratePerSecond),
+                        stringResource(R.string.tail_rate_fmt, displayed.size, tailState.ratePerSecond),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -112,7 +118,7 @@ fun TailScreen(
             },
             actions = {
                 IconButton(onClick = { if (!tailState.running) filtersOpen = true }) {
-                    Icon(Icons.Default.FilterList, contentDescription = "更多筛选")
+                    Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.cd_filter))
                 }
             }
         )
@@ -121,7 +127,7 @@ fun TailScreen(
         HomeStatusBar(
             result = null,
             checking = false,
-            phase = "",
+            phase = CheckPhase(),
             channelConnected = channelState.connected,
             channelLabel = channelState.deviceLabel,
             onGoConnect = onGoConnect,
@@ -146,7 +152,14 @@ fun TailScreen(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 44.dp)
-                ) { Text(if (tailState.running) "跟踪中…" else "开始跟踪", fontSize = 14.sp, maxLines = 1) }
+                ) {
+                    Text(
+                        if (tailState.running) stringResource(R.string.tail_running)
+                        else stringResource(R.string.tail_start),
+                        fontSize = 14.sp,
+                        maxLines = 1
+                    )
+                }
                 IconButton(
                     onClick = viewModel::togglePause,
                     enabled = tailState.running,
@@ -154,7 +167,7 @@ fun TailScreen(
                 ) {
                     Icon(
                         if (viewModel.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = if (viewModel.paused) "继续" else "暂停",
+                        contentDescription = if (viewModel.paused) stringResource(R.string.tail_resume) else stringResource(R.string.tail_pause),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -163,31 +176,28 @@ fun TailScreen(
                     enabled = tailState.running,
                     modifier = Modifier.size(40.dp)
                 ) {
-                    Icon(Icons.Default.Stop, contentDescription = "停止", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.tail_stop), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(
                     onClick = {
                         clipboard.setText(AnnotatedString(matched.joinToString("\n") { it.raw }))
-                        Toast.makeText(context, "已复制 ${matched.size} 行", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, copiedLinesText, Toast.LENGTH_SHORT).show()
                     },
                     enabled = matched.isNotEmpty(),
                     modifier = Modifier.size(40.dp)
                 ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "复制全部", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.cd_copy_all), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(
                     onClick = viewModel::clear,
                     enabled = lines.isNotEmpty(),
                     modifier = Modifier.size(40.dp)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "清空", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.tail_clear), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
             // 工具行：搜索 + 进程 + 级别 + 缓冲区，一行放下
-            var procOpen by remember(viewModel.packageName.isNotBlank()) {
-                mutableStateOf(viewModel.packageName.isNotBlank())
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -196,11 +206,12 @@ fun TailScreen(
                 EllipseTextField(
                     value = search,
                     onValueChange = { search = it },
-                    placeholder = "搜索实时日志…",
+                    placeholder = stringResource(R.string.tail_search_hint),
                     modifier = Modifier.weight(1f)
                 )
+                // 与首页一致：点「进程」直接弹应用选择器（v1.8.2 起不再展开输入行）
                 Surface(
-                    onClick = { procOpen = !procOpen },
+                    onClick = { viewModel.showPicker(true) },
                     shape = CircleShape,
                     color = if (viewModel.packageName.isNotBlank()) {
                         MaterialTheme.colorScheme.primaryContainer
@@ -209,7 +220,7 @@ fun TailScreen(
                     }
                 ) {
                     Text(
-                        viewModel.packageName.trim().take(10).ifBlank { "进程" } + if (procOpen) " ▾" else " ▸",
+                        viewModel.packageName.trim().take(10).ifBlank { stringResource(R.string.process) },
                         fontSize = 11.sp,
                         maxLines = 1,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -236,7 +247,7 @@ fun TailScreen(
                 FilterChip(
                     selected = viewModel.errorsOnly,
                     onClick = viewModel::toggleErrorsOnly,
-                    label = { Text("只看错误", fontSize = 11.sp, maxLines = 1) }
+                    label = { Text(stringResource(R.string.errors_only), fontSize = 11.sp, maxLines = 1) }
                 )
                 LogBuffer.entries.forEach { buffer ->
                     FilterChip(
@@ -248,24 +259,13 @@ fun TailScreen(
                 FilterChip(
                     selected = !filterMode,
                     onClick = { filterMode = !filterMode },
-                    label = { Text(if (filterMode) "搜索=过滤" else "搜索=高亮", fontSize = 11.sp, maxLines = 1) }
-                )
-            }
-
-            // 进程展开行：点「进程 ▸」后才出现
-            AnimatedVisibility(visible = procOpen) {
-                EllipseTextField(
-                    value = viewModel.packageName,
-                    onValueChange = viewModel::onPackageChange,
-                    placeholder = "包名，留空=全部进程",
-                    trailing = {
-                        IconButton(onClick = { viewModel.showPicker(true) }) {
-                            Icon(
-                                Icons.Default.Apps,
-                                contentDescription = "选择包名",
-                                modifier = Modifier.heightIn(max = 20.dp)
-                            )
-                        }
+                    label = {
+                        Text(
+                            if (filterMode) stringResource(R.string.search_as_filter)
+                            else stringResource(R.string.search_as_highlight),
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
                     }
                 )
             }
@@ -279,7 +279,7 @@ fun TailScreen(
                 highlight = search,
                 autoScroll = true,
                 modifier = Modifier.weight(1f),
-                emptyHint = if (tailState.running) "等待日志输出…" else "点击「开始跟踪」",
+                emptyHint = if (tailState.running) stringResource(R.string.tail_waiting) else stringResource(R.string.tail_tap_start),
                 reverseLayout = true,
                 onLineClick = { entry -> selectedLine = entry },
                 copyFeedback = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -302,15 +302,15 @@ fun TailScreen(
                     .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("更多筛选", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.cd_filter), style = MaterialTheme.typography.titleMedium)
                 EllipseTextField(
                     value = viewModel.keywordInput,
                     onValueChange = viewModel::onKeywordChange,
-                    placeholder = "关键词，逗号分隔",
-                    leadingLabel = "关键词"
+                    placeholder = stringResource(R.string.tail_keywords_hint),
+                    leadingLabel = stringResource(R.string.tail_keywords_label)
                 )
                 Text(
-                    "关键词在设备侧过滤（只回传命中行）；顶部搜索框在本机过滤/高亮，两者可叠加。",
+                    stringResource(R.string.tail_keywords_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -325,7 +325,7 @@ fun TailScreen(
             onDismiss = { selectedLine = null },
             onCopy = { text ->
                 clipboard.setText(AnnotatedString(text))
-                Toast.makeText(context, "已复制该行日志", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, copiedLineText, Toast.LENGTH_SHORT).show()
             }
         )
     }
