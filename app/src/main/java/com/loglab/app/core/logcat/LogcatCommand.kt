@@ -46,9 +46,10 @@ object LogcatCommandBuilder {
         } else {
             buffers.forEach { append(" -b ${it.value}") }
         }
-        // 多进程：每个 PID 一个 --pid（多数 ROM 支持多值；不支持时
-        // 由 LogRepository 在结果侧按 PID 集合二次过滤兜底）
-        config.pids.forEach { append(" --pid=$it") }
+        // 多进程：logcat 只接受**一个** --pid（真机报错 "Only one --pid argument
+        // can be provided."），命令侧只取第一个 PID；多 PID 应用（进程重启瞬间
+        // 新旧并存等）由 LogRepository 在结果侧按 PID 集合二次过滤兜底。
+        config.pids.firstOrNull()?.let { append(" --pid=$it") }
 
         when {
             config.tags.isNotEmpty() -> {
