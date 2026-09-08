@@ -2,7 +2,9 @@
 
 # LogLab
 
-**无需 root · 无需电脑 · 无需数据线，手机直接抓取手机日志的 Android 应用**
+**No root · No PC · No cable — an Android app that captures your phone's logcat right on the phone**
+
+[English](README.md) | [简体中文](README_zh-CN.md)
 
 [![Release](https://img.shields.io/github/v/release/resooo/loglab)](https://github.com/resooo/loglab/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-green)](https://github.com/resooo/loglab/releases/latest)
@@ -10,27 +12,30 @@
 
 </div>
 
-LogLab 是一款内嵌 ADB 协议实现的日志抓取工具。通过 Android 无线调试（Wireless Debugging）的 TLS 配对机制，让手机自己成为自己的 logcat 终端——全程不需要电脑，也不需要 root。
+LogLab is a log capture tool with an embedded ADB protocol implementation. Using the TLS pairing mechanism of Android Wireless Debugging, the phone becomes its own logcat terminal — no computer, no root, no cable.
 
-## ✨ 功能
+## ✨ Features
 
-- **日志抓取**：按缓冲区（main / system / crash 等）、TAG、进程、日志级别组合过滤，支持关键词检索
-- **实时跟踪**：logcat -T 流式输出，后台 Service 保活，断线自动提示
-- **应用崩溃监控**：常驻监控本应用崩溃并保留堆栈报告，便于反馈定位
-- **一键导出**：导出为 `.log` / `.gz`，系统分享、保存到任意位置
-- **应用内更新**：自动检查 GitHub Releases 新版本，下载后直接拉起安装
-- **双通道连接**：内置 ADB 协议直连（arm64），或 HostBridge 远程网关
+- **Log capture**: combined filters by buffer (main / system / crash…), tag, process and priority, plus keyword search
+- **Live tailing**: streaming `logcat -T` output with a foreground service, auto re-attach when the target process restarts (PID follow)
+- **On-launch capture**: start capturing before the target app launches — never miss the startup moment
+- **Crash monitoring**: keeps the app's crash reports with full stack traces; today / last-7-days filter, app icons, one-tap history replay
+- **One-tap export**: export as `.log` / `.gz`, share or save anywhere
+- **In-app updates**: checks GitHub Releases at most once every 24 h, shows release notes, downloads and launches the installer
+- **Loopback-first connection**: connects to `127.0.0.1:<port>` learned from mDNS — switching Wi-Fi networks never breaks the connection (LAN-IP fallback kept)
+- **Dual channels**: embedded ADB protocol (arm64) or HostBridge remote gateway
+- **Bilingual UI**: follow system / 中文 / English
 
-## 📲 安装
+## 📲 Install
 
-1. 前往 [Releases](https://github.com/resooo/loglab/releases/latest) 下载最新 APK（arm64-v8a）
-2. 安装时如提示未知来源，允许「安装未知应用」即可
-3. 首次使用按引导完成一次无线调试配对（需要开发者选项中开启「无线调试」）
+1. Grab the latest APK (arm64-v8a) from [Releases](https://github.com/resooo/loglab/releases/latest)
+2. If prompted, allow "install unknown apps"
+3. On first use, follow the in-app guide to pair once with Wireless Debugging (enable it in Developer options)
 
-> 配对说明：无线调试的配对码/端口只在「使用配对码配对设备」弹窗打开期间有效，
-> 部分系统（如 ColorOS）切走应用后会刷新配对码。推荐按 App 内引导使用**分屏/小窗**完成配对。
+> Pairing note: the pairing code/port is only valid while the "Pair device with pairing code" dialog is open.
+> On some ROMs (e.g. ColorOS) the code refreshes when you switch apps — use split-screen / floating window as guided in-app.
 
-## 🔧 构建
+## 🔧 Build
 
 ```bash
 git clone https://github.com/resooo/loglab.git
@@ -38,27 +43,27 @@ cd loglab
 ./gradlew assembleRelease
 ```
 
-- 需要 JDK 17、Android SDK（compileSdk 35 / build-tools 34）
-- release 签名默认读取 `app/keystore/debug.jks`（不入库）。本地调试可用 `assembleDebug`
-- CI（GitHub Actions）通过 Secrets 注入签名环境变量：`KS_FILE`（base64 解码后的 jks 路径）、`KS_PASS`、`KEY_ALIAS`、`KEY_PASS`
+- Requires JDK 17 and Android SDK (compileSdk 35 / build-tools 34)
+- The release signing keystore defaults to `app/keystore/debug.jks` (not committed). Use `assembleDebug` for local debugging
+- CI (GitHub Actions) injects signing secrets: `KS_FILE`, `KS_PASS`, `KEY_ALIAS`, `KEY_PASS`
 
-## 🚀 发布流程
+## 🚀 Release flow
 
 ```bash
-# 1. 更新 app/build.gradle.kts 中的 versionName / versionCode
-# 2. 提交并打 tag（tag 必须与 versionName 一致）
-git tag v1.6.0
+# 1. Bump versionName / versionCode in app/build.gradle.kts
+# 2. Commit and tag (the tag must match versionName)
+git tag v1.8.0
 git push origin main --tags
-# 3. GitHub Actions 自动构建 release APK 并上传到该 Release
+# 3. GitHub Actions builds the release APK and attaches it to the Release
 ```
 
-App 内「设置 → 检查更新」会拉取 `releases/latest`，按 tag 与本地版本号比较，发现新版即可在应用内下载安装。
+The in-app "Settings → Check updates" fetches `releases/latest`, compares the tag with the local version, and downloads + installs when a newer version is found.
 
-## ⚠️ 隐私与免责声明
+## ⚠️ Privacy & Disclaimer
 
-- 日志可能包含设备上的敏感信息（账号、Token、个人数据等），分享/导出前请自行确认
-- 本应用仅使用 Android 官方无线调试能力（ADB over TLS），不申请 root，不上传任何数据
-- 使用本软件产生的一切后果由使用者自行承担
+- Logs may contain sensitive information (accounts, tokens, personal data…) — review before sharing/exporting
+- The app only uses Android's official Wireless Debugging (ADB over TLS): no root, nothing uploaded
+- Use at your own risk
 
 ## 📄 License
 
