@@ -1,7 +1,6 @@
 package com.loglab.app.ui.capture
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
@@ -30,6 +28,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -57,11 +56,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.loglab.app.R
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.data.model.LogEntry
@@ -86,6 +87,7 @@ fun CaptureScreen(
     onGoConnect: () -> Unit = {},
     onGoGuide: () -> Unit = {},
     onGoExport: () -> Unit = {},
+    onGoSettings: () -> Unit = {},
     viewModel: CaptureViewModel = hiltViewModel()
 ) {
     val settings by viewModel.appSettings.collectAsState()
@@ -111,16 +113,16 @@ fun CaptureScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         // ---- 顶栏：使用方法 + 筛选 + 导出（复制/清空在主按钮行，⋮ 菜单已删）----
         TopAppBar(
-            title = { Text("抓取") },
+            title = { Text(stringResource(R.string.tab_capture)) },
             actions = {
                 IconButton(onClick = onGoGuide) {
-                    Icon(Icons.Default.HelpOutline, contentDescription = "使用方法")
+                    Icon(Icons.Default.HelpOutline, contentDescription = stringResource(R.string.cd_guide))
                 }
                 IconButton(onClick = { filtersOpen = true }) {
-                    Icon(Icons.Default.FilterList, contentDescription = "更多筛选")
+                    Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.cd_filter))
                 }
                 IconButton(onClick = onGoExport) {
-                    Icon(Icons.Default.SaveAlt, contentDescription = "导出日志")
+                    Icon(Icons.Default.SaveAlt, contentDescription = stringResource(R.string.cd_export))
                 }
             }
         )
@@ -136,6 +138,42 @@ fun CaptureScreen(
             onGoConnect = onGoConnect,
             onRetry = { viewModel.runStartupCheck("手动重试") }
         )
+
+        // ---- 更新横幅：启动静默检查发现新版本时出现，点击进设置页自动弹更新框 ----
+        viewModel.availableUpdate?.let { update ->
+            Surface(
+                onClick = onGoSettings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Stream,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        stringResource(R.string.update_banner, update.version),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "›",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
 
         // 回到前台时自动重跑检查：App 被切后台再回来时进程往往没被杀，
         // ViewModel 也不会重建——若不重跑，就会一直显示旧结果（例如"已连接旧端口"），
@@ -185,7 +223,7 @@ fun CaptureScreen(
                         .heightIn(min = 44.dp)
                 ) {
                     Text(
-                        if (viewModel.busy) "抓取中…" else "开始抓取日志",
+                        if (viewModel.busy) stringResource(R.string.capture_running) else stringResource(R.string.capture_start),
                         fontSize = 14.sp,
                         maxLines = 1
                     )
@@ -200,7 +238,7 @@ fun CaptureScreen(
                 ) {
                     Icon(
                         Icons.Default.ContentCopy,
-                        contentDescription = "复制全部",
+                        contentDescription = stringResource(R.string.cd_copy_all),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -211,7 +249,7 @@ fun CaptureScreen(
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "清空日志",
+                        contentDescription = stringResource(R.string.cd_clear_logs),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -223,12 +261,11 @@ fun CaptureScreen(
 
             viewModel.status?.let {
                 CopyableText(text = it)
+            } ?: viewModel.lastLines?.let { lines ->
+                CopyableText(text = stringResource(R.string.capture_stats_fmt, lines, viewModel.lastDurationMs))
             }
 
             // ---- 工具行：搜索 + 进程 + 级别 + 行数，一行放下（缓冲区在「更多筛选」里）----
-            var procOpen by remember(viewModel.packageName.isNotBlank()) {
-                mutableStateOf(viewModel.packageName.isNotBlank())
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -237,11 +274,12 @@ fun CaptureScreen(
                 EllipseTextField(
                     value = search,
                     onValueChange = { search = it },
-                    placeholder = "搜索日志…",
+                    placeholder = stringResource(R.string.search_hint),
                     modifier = Modifier.weight(1f)
                 )
+                // 点「进程」直接弹应用选择器（不再展开输入框；换应用/清除在弹窗里完成）
                 Surface(
-                    onClick = { procOpen = !procOpen },
+                    onClick = { viewModel.showPicker(true) },
                     shape = CircleShape,
                     color = if (viewModel.packageName.isNotBlank()) {
                         MaterialTheme.colorScheme.primaryContainer
@@ -250,7 +288,7 @@ fun CaptureScreen(
                     }
                 ) {
                     Text(
-                        viewModel.packageName.trim().take(10).ifBlank { "进程" } + if (procOpen) " ▾" else " ▸",
+                        viewModel.packageName.trim().take(10).ifBlank { stringResource(R.string.process) },
                         fontSize = 11.sp,
                         maxLines = 1,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -273,7 +311,7 @@ fun CaptureScreen(
                 )
             }
 
-            // ---- 快捷芯片行（横向滚动）：只看错误 / 缓冲区多选 / 启动抓取 / 匹配模式 ----
+            // ---- 快捷芯片行（横向滚动）：只看错误 / 启动抓取 / 缓冲区多选 / 匹配模式 ----
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -284,7 +322,12 @@ fun CaptureScreen(
                 FilterChip(
                     selected = viewModel.errorsOnly,
                     onClick = viewModel::toggleErrorsOnly,
-                    label = { Text("只看错误", fontSize = 11.sp, maxLines = 1) }
+                    label = { Text(stringResource(R.string.errors_only), fontSize = 11.sp, maxLines = 1) }
+                )
+                FilterChip(
+                    selected = viewModel.startupMode,
+                    onClick = { viewModel.onStartupModeChange(!viewModel.startupMode) },
+                    label = { Text(stringResource(R.string.startup_capture), fontSize = 11.sp, maxLines = 1) }
                 )
                 LogBuffer.entries.forEach { buffer ->
                     FilterChip(
@@ -294,14 +337,16 @@ fun CaptureScreen(
                     )
                 }
                 FilterChip(
-                    selected = viewModel.startupMode,
-                    onClick = { viewModel.onStartupModeChange(!viewModel.startupMode) },
-                    label = { Text("启动抓取", fontSize = 11.sp, maxLines = 1) }
-                )
-                FilterChip(
                     selected = !filterMode,
                     onClick = { filterMode = !filterMode },
-                    label = { Text(if (filterMode) "搜索=过滤" else "搜索=高亮", fontSize = 11.sp, maxLines = 1) }
+                    label = {
+                        Text(
+                            if (filterMode) stringResource(R.string.search_as_filter)
+                            else stringResource(R.string.search_as_highlight),
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
                 )
             }
 
@@ -312,7 +357,7 @@ fun CaptureScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "启动点：第 ${viewModel.startupIndex + 1} 行" +
+                        stringResource(R.string.startup_point_line, viewModel.startupIndex + 1) +
                             (viewModel.startupPid?.let { " · PID $it" } ?: ""),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -320,27 +365,9 @@ fun CaptureScreen(
                     FilterChip(
                         selected = viewModel.startupOnly,
                         onClick = viewModel::toggleStartupOnly,
-                        label = { Text("只看启动后", fontSize = 11.sp, maxLines = 1) }
+                        label = { Text(stringResource(R.string.startup_only_after), fontSize = 11.sp, maxLines = 1) }
                     )
                 }
-            }
-
-            // 进程展开行：点「进程 ▸」后才出现，不占常驻空间
-            AnimatedVisibility(visible = procOpen) {
-                EllipseTextField(
-                    value = viewModel.packageName,
-                    onValueChange = viewModel::onPackageChange,
-                    placeholder = "包名，留空=全部进程",
-                    trailing = {
-                        IconButton(onClick = { viewModel.showPicker(true) }) {
-                            Icon(
-                                Icons.Default.Apps,
-                                contentDescription = "选择包名",
-                                modifier = Modifier.heightIn(max = 20.dp)
-                            )
-                        }
-                    }
-                )
             }
 
             // 日志区占据剩余全部空间；点行弹底部详情面板
@@ -351,7 +378,7 @@ fun CaptureScreen(
                 monoFont = settings.monoFont,
                 highlight = highlight,
                 modifier = Modifier.weight(1f),
-                emptyHint = "连接成功后，点上方按钮即可抓取日志\n首次使用点右上角 ? 查看使用方法",
+                emptyHint = stringResource(R.string.empty_capture_hint),
                 onLineClick = { entry -> selectedLine = entry },
                 copyFeedback = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
             )
