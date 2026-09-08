@@ -18,11 +18,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.loglab.app.R
 import com.loglab.app.ui.capture.CaptureScreen
 import com.loglab.app.ui.connect.ConnectScreen
 import com.loglab.app.ui.crash.CrashScreen
@@ -32,14 +34,14 @@ import com.loglab.app.ui.logview.LogViewScreen
 import com.loglab.app.ui.settings.SettingsScreen
 import com.loglab.app.ui.tail.TailScreen
 
-private data class Destination(val route: String, val label: String, val icon: ImageVector)
+private data class Destination(val route: String, val labelRes: Int, val icon: ImageVector)
 
 /** 底部导航只保留 4 个高频入口；导出并入抓取页顶栏保存按钮，运行日志从设置页进入 */
 private val destinations = listOf(
-    Destination("capture", "抓取", Icons.AutoMirrored.Filled.ListAlt),
-    Destination("crash", "崩溃", Icons.Filled.BugReport),
-    Destination("tail", "实时", Icons.Filled.Stream),
-    Destination("settings", "设置", Icons.Filled.Settings)
+    Destination("capture", R.string.tab_capture, Icons.AutoMirrored.Filled.ListAlt),
+    Destination("crash", R.string.tab_crash, Icons.Filled.BugReport),
+    Destination("tail", R.string.tab_tail, Icons.Filled.Stream),
+    Destination("settings", R.string.tab_settings, Icons.Filled.Settings)
 )
 
 private val topRoutes = destinations.map { it.route }.toSet()
@@ -48,7 +50,8 @@ private val topRoutes = destinations.map { it.route }.toSet()
 fun LogcatApp() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
+    // settings 路由带可选参数（settings?auto={auto}），截掉参数部分再比对底部导航
+    val currentRoute = backStackEntry?.destination?.route?.substringBefore('?')
 
     Scaffold(
         // 顶栏由各页面自带的 TopAppBar 处理状态栏避让（enableEdgeToEdge 下不重叠）；
@@ -58,6 +61,7 @@ fun LogcatApp() {
             if (currentRoute in topRoutes) {
                 NavigationBar {
                     destinations.forEach { destination ->
+                        val label = stringResource(destination.labelRes)
                         NavigationBarItem(
                             selected = currentRoute == destination.route,
                             onClick = {
@@ -69,8 +73,8 @@ fun LogcatApp() {
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(destination.icon, contentDescription = destination.label) },
-                            label = { Text(destination.label) }
+                            icon = { Icon(destination.icon, contentDescription = label) },
+                            label = { Text(label) }
                         )
                     }
                 }
@@ -88,13 +92,19 @@ fun LogcatApp() {
                 CaptureScreen(
                     onGoConnect = { navController.navigate("connect") },
                     onGoGuide = { navController.navigate("guide") },
-                    onGoExport = { navController.navigate("export") }
+                    onGoExport = { navController.navigate("export") },
+                    // 点击更新横幅：进设置页并自动弹出更新框
+                    onGoSettings = { navController.navigate("settings?auto=1") }
                 )
             }
             composable("crash") { CrashScreen() }
             composable("tail") { TailScreen(onGoConnect = { navController.navigate("connect") }) }
-            composable("settings") {
-                SettingsScreen(onGoLogView = { navController.navigate("logview") })
+            composable("settings?auto={auto}") { entry ->
+                SettingsScreen(
+                    onGoLogView = { navController.navigate("logview") },
+                    onGoConnect = { navController.navigate("connect") },
+                    autoCheckUpdate = entry.arguments?.getString("auto") == "1"
+                )
             }
             // 二级页：无底部导航，顶栏返回
             composable("export") { ExportScreen(onBack = { navController.popBackStack() }) }
