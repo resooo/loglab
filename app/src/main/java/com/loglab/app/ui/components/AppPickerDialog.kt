@@ -30,8 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.loglab.app.R
 import com.loglab.app.core.apps.AppInfo
 import com.loglab.app.core.apps.AppInfoProvider
 
@@ -63,25 +65,25 @@ fun AppPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择应用") },
+        title = { Text(stringResource(R.string.picker_title)) },
         text = {
             Column {
                 EllipseTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = "搜索应用名或包名…",
+                    placeholder = stringResource(R.string.picker_search_hint),
                     trailing = {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { query = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "清除搜索")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
                             }
                         }
                     }
                 )
                 Text(
                     when {
-                        loading -> "正在读取应用列表…"
-                        else -> "${filtered.size} / ${apps.size} 个应用（前台/运行中排在前）"
+                        loading -> stringResource(R.string.picker_loading)
+                        else -> stringResource(R.string.picker_count_fmt, filtered.size, apps.size)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -91,14 +93,14 @@ fun AppPickerDialog(
                     if (!loading && apps.isEmpty()) {
                         item {
                             Text(
-                                "未获取到应用列表，请确认已连接后点「刷新」重试",
+                                stringResource(R.string.picker_empty),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
                     } else if (!loading && filtered.isEmpty()) {
                         item {
                             Text(
-                                "没有匹配「${query.trim()}」的应用",
+                                stringResource(R.string.picker_no_match_fmt, query.trim()),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -115,8 +117,8 @@ fun AppPickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onRefresh) { Text("刷新") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+        confirmButton = { TextButton(onClick = onRefresh) { Text(stringResource(R.string.picker_refresh)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.picker_close)) } }
     )
 }
 
@@ -159,11 +161,11 @@ private fun AppRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                if (app.foreground) Badge("前台", MaterialTheme.colorScheme.primary)
-                else if (app.running) Badge("运行中", MaterialTheme.colorScheme.tertiary)
+                if (app.foreground) Badge(stringResource(R.string.badge_fg), MaterialTheme.colorScheme.primary)
+                else if (app.running) Badge(stringResource(R.string.badge_running), MaterialTheme.colorScheme.tertiary)
             }
             Text(
-                app.packageName + (if (app.isSystem) " · 系统" else ""),
+                app.packageName + (if (app.isSystem) stringResource(R.string.picker_system_suffix) else ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
