@@ -26,7 +26,7 @@ class AdbPairing @Inject constructor(
     suspend fun pair(host: String, port: Int, code: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             require(code.length >= 6) { "配对码应为 6 位数字" }
-            Kadb.pair(host, port, code, "logcat-grabber")
+            Kadb.pair(host, port, code, "LogLab")
             // 关键：Kadb 的密钥只在内存，必须在配对成功当下导出存档，
             // 否则进程重启后密钥丢失，设备会拒绝新密钥（CERTIFICATE_UNKNOWN）
             certPersistence.save()
