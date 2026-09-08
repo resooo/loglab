@@ -25,11 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.loglab.app.R
+import com.loglab.app.core.connect.CheckPhase
 import com.loglab.app.core.connect.StartupCheckResult
 
 /**
@@ -112,7 +115,7 @@ fun EllipseTextField(
 fun HomeStatusBar(
     result: StartupCheckResult?,
     checking: Boolean,
-    phase: String,
+    phase: CheckPhase,
     channelConnected: Boolean,
     channelLabel: String,
     onGoConnect: () -> Unit,
@@ -137,9 +140,13 @@ fun HomeStatusBar(
             ) {
                 Dot(Color(0xFFFFB74D), Modifier.padding(end = 8.dp))
                 Column {
-                    Text("正在检查 ADB 连接…", fontSize = 13.sp, color = muted)
-                    if (phase.isNotBlank()) {
-                        Text(phase, fontSize = 12.sp, color = muted)
+                    Text(stringResource(R.string.status_checking), fontSize = 13.sp, color = muted)
+                    if (phase.res != null) {
+                        Text(
+                            stringResource(phase.res, *phase.args.toTypedArray()),
+                            fontSize = 12.sp,
+                            color = muted
+                        )
                     }
                 }
             }
@@ -152,7 +159,8 @@ fun HomeStatusBar(
             ) {
                 Dot(Color(0xFF3DDC84), Modifier.padding(end = 8.dp))
                 Text(
-                    if (channelLabel.isNotBlank()) "已连接 · $channelLabel" else "已连接",
+                    if (channelLabel.isNotBlank()) stringResource(R.string.connected_fmt, channelLabel)
+                    else stringResource(R.string.connected_short),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -192,7 +200,7 @@ fun HomeStatusBar(
                 ) {
                     Dot(Color(0xFFFF6B6B), Modifier.padding(end = 8.dp))
                     Text(
-                        result.message,
+                        stringResource(result.messageRes, *result.messageArgs.toTypedArray()),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Medium,
@@ -200,15 +208,17 @@ fun HomeStatusBar(
                     )
                     if (isDebugOff) {
                         TextButton(onClick = openDevSettings) {
-                            Text("去开启", fontSize = 13.sp)
+                            Text(stringResource(R.string.status_go_enable), fontSize = 13.sp)
                         }
                     } else {
                         TextButton(onClick = onGoConnect) {
-                            Text("去连接", fontSize = 13.sp)
+                            Text(stringResource(R.string.status_go_connect), fontSize = 13.sp)
                         }
                     }
                     if (result.needsAction) {
-                        TextButton(onClick = onRetry) { Text("重试", fontSize = 13.sp) }
+                        TextButton(onClick = onRetry) {
+                            Text(stringResource(R.string.status_retry), fontSize = 13.sp)
+                        }
                     }
                 }
             }
@@ -220,8 +230,13 @@ fun HomeStatusBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Dot(Color(0xFF9AA0A6), Modifier.padding(end = 8.dp))
-                Text("未连接", fontSize = 13.sp, color = muted, modifier = Modifier.weight(1f))
-                TextButton(onClick = onGoConnect) { Text("去连接", fontSize = 13.sp) }
+                Text(
+                    stringResource(R.string.disconnected),
+                    fontSize = 13.sp,
+                    color = muted,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onGoConnect) { Text(stringResource(R.string.status_go_connect), fontSize = 13.sp) }
             }
         }
     }
