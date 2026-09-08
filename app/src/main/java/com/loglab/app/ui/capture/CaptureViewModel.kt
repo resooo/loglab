@@ -1,5 +1,6 @@
 package com.loglab.app.ui.capture
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.loglab.app.core.apps.AppInfo
 import com.loglab.app.core.apps.AppInfoProvider
 import com.loglab.app.core.channel.ChannelManager
+import com.loglab.app.R
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.core.logcat.LogcatConfig
@@ -17,6 +19,7 @@ import com.loglab.app.data.model.LogEntry
 import com.loglab.app.data.repository.LogRepository
 import com.loglab.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -25,13 +28,18 @@ import javax.inject.Inject
 
 data class TagFilter(val tag: String, val priority: LogPriority)
 
+/** 启动自动检查更新的最小间隔：24 小时 */
+private const val UPDATE_CHECK_INTERVAL_MS = 24 * 3600_000L
+
 @HiltViewModel
 class CaptureViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val repository: LogRepository,
     val channelManager: ChannelManager,
     private val settings: SettingsRepository,
     private val startupCheck: com.loglab.app.core.connect.StartupCheck,
     val appInfoProvider: AppInfoProvider,
+    private val updateManager: com.loglab.app.core.update.UpdateManager,
     private val logger: com.loglab.app.core.report.AppLogger
 ) : ViewModel() {
 
@@ -87,6 +95,10 @@ class CaptureViewModel @Inject constructor(
     var lastDurationMs by mutableStateOf(0L)
         private set
 
+    /** 最近一次普通抓取的行数（null=无可显示的统计行）；文案由 UI 层本地化拼接 */
+    var lastLines by mutableStateOf<Int?>(null)
+        private set
+
     /** 图标化应用选择器 */
     var apps by mutableStateOf<List<AppInfo>>(emptyList())
         private set
@@ -112,6 +124,33 @@ class CaptureViewModel @Inject constructor(
             buffers = saved.defaultBuffers.ifEmpty { setOf(LogBuffer.MAIN, LogBuffer.CRASH) }
         }
         runStartupCheck("首次进入")
+        checkUpdateSilently()
+    }
+
+    // ---------------- 启动静默检查更新（24h 节流） ----------------
+
+    /** 发现的新版本；null=无新版或本次未检查 */
+    var availableUpdate by mutableStateOf<com.loglab.app.core.update.UpdateManager.UpdateInfo?>(null)
+        private set
+
+    /**
+     * 启动时静默检查 GitHub Releases：距上次成功检查不足 24h 则跳过。
+     * 失败静默忽略（无网时不打扰用户），只写日志；成功才刷新节流时间戳。
+     */
+    private fun checkUpdateSilently() {
+        viewModelScope.launch {
+            val last = runCatching { settings.current().lastUpdateCheck }.getOrDefault(0L)
+            if (System.currentTimeMillis() - last < UPDATE_CHECK_INTERVAL_MS) return@launch
+            val info = runCatching { updateManager.checkLatest(updateManager.localVersion()) }
+                .onSuccess {
+                    settings.update { s -> s.copy(lastUpdateCheck = System.currentTimeMillis()) }
+                }
+                .getOrNull()
+            info?.let {
+                availableUpdate = it
+                logger.log("Update", "启动检查：发现新版本 ${it.version}")
+            }
+        }
     }
 
     /**
@@ -233,6 +272,7 @@ class CaptureViewModel @Inject constructor(
     fun clearLogs() {
         entries = emptyList()
         status = null
+        lastLines = null
         startupPid = null
         startupIndex = -1
         startupOnly = false
@@ -242,6 +282,7 @@ class CaptureViewModel @Inject constructor(
         if (busy) return
         viewModelScope.launch {
             busy = true
+            lastLines = null
             startupPid = null
             startupIndex = -1
             startupOnly = false
@@ -288,10 +329,14 @@ class CaptureViewModel @Inject constructor(
                 lastDurationMs = System.currentTimeMillis() - startedAt
                 result.onSuccess { list ->
                     entries = list
-                    status = "共 ${list.size} 行 · 耗时 ${lastDurationMs}ms"
+                    // 统计行文案由 UI 层本地化（stringResource），这里只给数据
+                    status = null
+                    lastLines = list.size
                     pkg?.let { settings.rememberPackage(it) }
                 }.onFailure { error ->
-                    status = "抓取失败：${error.message}"
+                    status = if (error.message?.contains("ECONNREFUSED") == true)
+                        context.getString(R.string.capture_fail_adb_off)
+                    else "抓取失败：${error.message}"
                     entries = emptyList()
                 }
             }
