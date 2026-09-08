@@ -1,6 +1,9 @@
 package com.loglab.app.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,16 +22,21 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,15 +47,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import com.loglab.app.R
 import com.loglab.app.core.report.CrashReporter
+import com.loglab.app.core.update.UpdateManager
 import com.loglab.app.ui.components.CopyableText
 import kotlinx.coroutines.delay
 
@@ -59,6 +74,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun SettingsScreen(
     onGoLogView: () -> Unit = {},
+    onGoConnect: () -> Unit = {},
+    autoCheckUpdate: Boolean = false,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.appSettings.collectAsState()
@@ -72,8 +89,13 @@ fun SettingsScreen(
     var updateDismissed by remember { mutableStateOf(false) }
     LaunchedEffect(updateState) { updateDismissed = false }
 
+    // 从首页更新横幅跳转过来（settings?auto=1）：进入即自动检查并弹更新框
+    LaunchedEffect(autoCheckUpdate) {
+        if (autoCheckUpdate) viewModel.checkUpdate()
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("设置") })
+        TopAppBar(title = { Text(stringResource(R.string.tab_settings)) })
 
         Column(
             modifier = Modifier
@@ -83,7 +105,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // ==================== 状态（连接/配对 + 兜底操作） ====================
-            SectionTitle("状态")
+            SectionTitle(stringResource(R.string.section_status))
             val channelState by viewModel.channelState.collectAsState()
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -100,60 +122,126 @@ fun SettingsScreen(
                 )
                 Text(
                     if (channelState.connected) {
-                        "已连接 · ${channelState.deviceLabel.ifBlank { "ADB" }}"
+                        stringResource(
+                            R.string.connected_fmt,
+                            channelState.deviceLabel.ifBlank { "ADB" }
+                        )
                     } else {
-                        "未连接"
+                        stringResource(R.string.disconnected)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
             }
             Text(
-                if (settings.adbPaired) "已配对（配对密钥保存在本机）" else "未配对",
+                if (settings.adbPaired) stringResource(R.string.paired) else stringResource(R.string.unpaired),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // stringResource 不能在 onClick（非 Composable 上下文）里调用，提前取好
+            val toastResetPairing = stringResource(R.string.toast_reset_pairing)
+            val toastClearAddress = stringResource(R.string.toast_clear_address)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 重新配对：断开通道 + 清配对标记后直接跳连接页走配对流程
                 OutlinedButton(onClick = {
                     viewModel.resetPairing()
-                    Toast.makeText(context, "已重置配对状态：回首页点状态行 → 连接页重新配对", Toast.LENGTH_LONG).show()
-                }) { Text("重新配对") }
+                    Toast.makeText(context, toastResetPairing, Toast.LENGTH_LONG).show()
+                    onGoConnect()
+                }) { Text(stringResource(R.string.reset_pairing)) }
                 OutlinedButton(onClick = {
                     viewModel.clearConnectionInfo()
-                    Toast.makeText(context, "已清除连接地址，下次连接将重新扫描", Toast.LENGTH_SHORT).show()
-                }) { Text("清除连接地址") }
+                    Toast.makeText(context, toastClearAddress, Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.clear_address)) }
             }
 
-            SectionTitle("外观")
+            SectionTitle(stringResource(R.string.section_appearance))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = settings.darkTheme,
                     onCheckedChange = { dark -> viewModel.update { it.copy(darkTheme = dark) } }
                 )
-                Text("深色主题", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.dark_theme), style = MaterialTheme.typography.bodyMedium)
+            }
+
+            // 语言切换：跟随系统 / 中文 / English。
+            // AppCompatDelegate.setApplicationLocales 由 AppCompat 自动持久化
+            // （Manifest 已启用 autoStoreLocales），设置后 Activity 自动重建生效。
+            var langMenuOpen by remember { mutableStateOf(false) }
+            val currentLocales = AppCompatDelegate.getApplicationLocales()
+            val langLabel = when {
+                currentLocales.isEmpty -> stringResource(R.string.lang_follow_system)
+                currentLocales[0]?.language == "en" -> stringResource(R.string.lang_en)
+                else -> stringResource(R.string.lang_zh)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { langMenuOpen = true }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.language),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    langLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DropdownMenu(expanded = langMenuOpen, onDismissRequest = { langMenuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.lang_follow_system)) },
+                        onClick = {
+                            langMenuOpen = false
+                            AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.lang_zh)) },
+                        onClick = {
+                            langMenuOpen = false
+                            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("zh"))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.lang_en)) },
+                        onClick = {
+                            langMenuOpen = false
+                            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
+                        }
+                    )
+                }
             }
 
             // ==================== 诊断 ====================
-            SectionTitle("诊断")
+            SectionTitle(stringResource(R.string.section_diagnostics))
 
             // 上次崩溃报告：App 闪退时用户拿不到 logcat，这里把堆栈展示出来便于反馈定位
             val crashReport = remember { CrashReporter.read(context) }
             var crashVisible by remember { mutableStateOf(crashReport != null) }
             if (crashVisible && crashReport != null) {
+                val toastCopiedReport = stringResource(R.string.toast_copied_crash_report)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "上次崩溃报告",
+                        stringResource(R.string.last_crash_report),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = {
                         clipboard.setText(AnnotatedString(crashReport))
-                        Toast.makeText(context, "已复制崩溃报告", Toast.LENGTH_SHORT).show()
-                    }) { Text("复制") }
+                        Toast.makeText(context, toastCopiedReport, Toast.LENGTH_SHORT).show()
+                    }) { Text(stringResource(R.string.copy)) }
                     TextButton(onClick = {
                         CrashReporter.clear(context)
                         crashVisible = false
-                    }) { Text("清除") }
+                    }) { Text(stringResource(R.string.clear)) }
                 }
                 Text(
                     crashReport,
@@ -181,9 +269,9 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("运行日志", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.run_log), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        logPreview.lineSequence().take(3).joinToString("\n").ifBlank { "（暂无日志）" },
+                        logPreview.lineSequence().take(3).joinToString("\n").ifBlank { stringResource(R.string.no_log_yet) },
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 10.sp,
@@ -193,40 +281,40 @@ fun SettingsScreen(
                 }
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "查看运行日志",
+                    contentDescription = stringResource(R.string.cd_view_log),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             // ==================== 关于 ====================
-            SectionTitle("关于")
+            SectionTitle(stringResource(R.string.section_about))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "当前版本 ${viewModel.localVersion}",
+                        stringResource(R.string.current_version_fmt, viewModel.localVersion),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     when (val s = updateState) {
                         is UpdateUiState.UpToDate -> Text(
-                            "已是最新版本",
+                            stringResource(R.string.up_to_date),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         is UpdateUiState.Available -> Text(
-                            "发现新版本 ${s.info.version}，点「检查更新」查看详情",
+                            stringResource(R.string.update_available_fmt, s.info.version),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                         is UpdateUiState.Downloading -> Text(
-                            "下载中 ${s.progress}%",
+                            stringResource(R.string.downloading_fmt, s.progress),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                         is UpdateUiState.Downloaded -> Text(
-                            "更新包已就绪，点「检查更新」可安装",
+                            stringResource(R.string.downloaded_ready),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -244,7 +332,7 @@ fun SettingsScreen(
                         updateState !is UpdateUiState.Downloading
                 ) {
                     Text(
-                        if (updateState is UpdateUiState.Checking) "检查中…" else "检查更新"
+                        if (updateState is UpdateUiState.Checking) stringResource(R.string.checking) else stringResource(R.string.check_update)
                     )
                 }
             }
@@ -256,7 +344,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "关于 LogLab",
+                    stringResource(R.string.about_loglab),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -271,46 +359,114 @@ fun SettingsScreen(
         }
     }
 
-    // ---- 关于弹窗 ----
+    // ---- 关于面板（底部弹出） ----
     if (aboutOpen) {
         val version = remember {
             runCatching {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName
             }.getOrNull() ?: "1.0.0"
         }
-        AlertDialog(
-            onDismissRequest = { aboutOpen = false },
-            title = { Text("LogLab") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("版本 $version", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "内嵌 ADB 无线调试的日志抓取工具：无需 root、无需电脑、无需数据线，" +
-                            "手机直接抓取手机日志。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "主要功能：日志抓取、实时跟踪、一键导出、应用崩溃监控。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "技术说明：内嵌 ADB 协议实现（Kadb TLS 无线配对），支持 ADB 直连与 HostBridge 双通道。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "提示：抓取的日志可能包含敏感信息，分享前请自行确认。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(onDismissRequest = { aboutOpen = false }, sheetState = sheetState) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 头部：图标 + 名称 + 版本徽章
+                val appIcon = remember {
+                    runCatching { context.packageManager.getApplicationIcon(context.packageName) }
+                        .getOrNull()
+                }
+                if (appIcon != null) {
+                    Image(
+                        bitmap = appIcon.toBitmap().asImageBitmap(),
+                        contentDescription = stringResource(R.string.app_name),
+                        modifier = Modifier.size(72.dp)
                     )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { aboutOpen = false }) { Text("确定") }
+                Text("LogLab", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        "v$version",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+                Text(
+                    stringResource(R.string.about_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // 功能速览
+                Text(
+                    stringResource(R.string.about_features),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    stringResource(R.string.about_tech),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // 入口行：开源仓库 / Bug 反馈
+                AboutLinkRow(
+                    title = stringResource(R.string.about_open_source),
+                    subtitle = UpdateManager.REPO_URL.removePrefix("https://"),
+                    onClick = { openUrl(context, UpdateManager.REPO_URL) }
+                )
+                AboutLinkRow(
+                    title = stringResource(R.string.about_bug_feedback),
+                    subtitle = "ibr@foxmail.com",
+                    onClick = {
+                        openUrl(
+                            context,
+                            "mailto:ibr@foxmail.com?subject=" +
+                                java.net.URLEncoder.encode("LogLab 反馈（v$version）", "UTF-8")
+                        )
+                    }
+                )
+
+                Text(
+                    stringResource(R.string.about_privacy_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // 署名：本 APP 由太墟构建
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.built_by_prefix),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        stringResource(R.string.taixu),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { openUrl(context, "https://github.com/wkbin/taixu") }
+                    )
+                    Text(
+                        stringResource(R.string.built_by_suffix),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-        )
+        }
     }
 
     // ---- 应用内更新对话框（GitHub Releases） ----
@@ -322,13 +478,13 @@ fun SettingsScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            s.info.notes.ifBlank { "（无更新说明）" },
+                            s.info.notes.ifBlank { stringResource(R.string.no_release_notes) },
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 12
                         )
                         if (s.info.apkSize > 0) {
                             Text(
-                                "安装包 ${s.info.apkName}（%.1f MB）".format(s.info.apkSize / 1024f / 1024f),
+                                stringResource(R.string.apk_size_fmt, s.info.apkName, s.info.apkSize / 1024f / 1024f),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -337,18 +493,18 @@ fun SettingsScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { viewModel.downloadUpdate(s.info) }) {
-                        Text("下载更新")
+                        Text(stringResource(R.string.download_update))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { updateDismissed = true }) { Text("稍后") }
+                    TextButton(onClick = { updateDismissed = true }) { Text(stringResource(R.string.later)) }
                 }
             )
         }
         is UpdateUiState.Downloading -> {
             AlertDialog(
                 onDismissRequest = { },
-                title = { Text("正在下载更新") },
+                title = { Text(stringResource(R.string.downloading_update)) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         LinearProgressIndicator(
@@ -356,34 +512,34 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
-                            "${s.progress}%  ·  下载完成后可返回此处安装",
+                            stringResource(R.string.download_progress_fmt, s.progress),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { updateDismissed = true }) { Text("后台继续") }
+                    TextButton(onClick = { updateDismissed = true }) { Text(stringResource(R.string.background_continue)) }
                 }
             )
         }
         is UpdateUiState.Downloaded -> if (!updateDismissed) {
             AlertDialog(
                 onDismissRequest = { },
-                title = { Text("更新包已下载") },
+                title = { Text(stringResource(R.string.update_downloaded_title)) },
                 text = {
                     Text(
-                        "点击「安装」拉起系统安装器。若提示无法安装，请先在系统设置中允许 LogLab「安装未知应用」。"
+                        stringResource(R.string.update_downloaded_body)
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = {
                         val tip = viewModel.installUpdate(s.file)
                         if (tip != null) Toast.makeText(context, tip, Toast.LENGTH_LONG).show()
-                    }) { Text("安装") }
+                    }) { Text(stringResource(R.string.install)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { updateDismissed = true }) { Text("稍后再装") }
+                    TextButton(onClick = { updateDismissed = true }) { Text(stringResource(R.string.install_later)) }
                 }
             )
         }
@@ -401,4 +557,43 @@ private fun SectionTitle(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(top = 10.dp)
     )
+}
+
+/** 关于面板里的可点击入口行：标题 + 副标题，整行点击 */
+@Composable
+private fun AboutLinkRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 用浏览器 / 邮件 App 打开链接；目标 App 不存在时静默失败 */
+private fun openUrl(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
 }
