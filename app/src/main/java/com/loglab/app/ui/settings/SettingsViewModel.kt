@@ -39,7 +39,7 @@ class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val logger: AppLogger,
     private val updateManager: UpdateManager,
-    channelManager: ChannelManager
+    private val channelManager: ChannelManager
 ) : ViewModel() {
 
     /** 运行日志（App 自身诊断日志，诊断组可查看/复制/清除） */
@@ -67,11 +67,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settings.update(transform) }
     }
 
-    /** 兜底：强制重新配对。清掉「已配对」标记，首页状态行会重新引导走配对流程 */
+    /** 兜底：强制重新配对。清掉「已配对」标记 + 断开通道：
+     *  不断开的话通道仍是「已连接」，首页状态行会被连接态覆盖，看不到「未配对」提示 */
     fun resetPairing() {
         viewModelScope.launch {
             settings.update { it.copy(adbPaired = false) }
-            logger.log("UI", "设置页：已重置配对状态")
+            runCatching { channelManager.disconnect() }
+            logger.log("UI", "设置页：已重置配对状态（通道已断开）")
         }
     }
 
