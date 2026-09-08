@@ -149,7 +149,11 @@ dependencies {
         // spake2-java 仅存在于 JitPack，CI 按需构建常超时，改用本地 jar
         exclude(group = "com.github.Flyfish233", module = "spake2-java")
     }
-    implementation(files("libs/spake2-java-1.0.5.jar"))
+    implementation(files(
+        "libs/spake2-java-1.0.5.jar",
+        "libs/curve25519-elisabeth-0.1.0.jar",
+        "libs/ed25519-elisabeth-0.1.0.jar"
+    ))
 
     // ---- Networking / serialization ----
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
