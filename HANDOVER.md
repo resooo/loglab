@@ -1,6 +1,6 @@
 # LogLab 项目交接文档
 
-> 版本：v1.7.2（versionCode 17）· 更新日期：2026-09-07
+> 版本：v1.8.3（versionCode 22）· 更新日期：2026-09-08
 > 面向接手开发/维护的工程师。读完本文应能独立完成：环境搭建、构建出包、理解核心链路、继续迭代。
 
 ---
@@ -22,7 +22,7 @@
 
 ---
 
-## 2. 功能清单（v1.7.0）
+## 2. 功能清单（v1.8.3）
 
 | 模块 | 功能 |
 |---|---|
@@ -192,11 +192,10 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 
 ### 6.1 环境要求
 
-- JDK 17（机器特定属性已移入本机 `~/.gradle/gradle.properties`，项目
-  `gradle.properties` 只保留通用配置，CI 直接可用）
+- JDK 17（`gradle.properties` 已写死 `org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64`，
+  其他环境需改掉这行或对齐路径）
 - Android SDK：platform 35 + **build-tools 34.0.0**（`buildToolsVersion` 已锁定；
-  沙箱环境在本机 `~/.gradle/gradle.properties` 中设 `android.builder.sdkDownload=false`
-  禁止 AGP 联网下载，其他环境无需设置）
+  `android.builder.sdkDownload=false` 禁止 AGP 联网下载，其他环境可删）
 - Gradle 8.9（或 `./gradlew` 若补 wrapper——当前仓库**没有 wrapper**，用系统 gradle）
 
 ### 6.2 构建命令
@@ -212,13 +211,10 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 
 ### 6.3 签名与版本号
 
-- 签名：凭据从源码移除，来源优先级为 CI 环境变量（GitHub Actions secrets：
-  `KS_FILE`/`KS_PASS`/`KEY_ALIAS`/`KEY_PASS`）> 根目录 `keystore.properties`
-  （不入库）> Android 标准 debug keystore。keystore 文件仅由维护者本地保管。
-  见 `app/build.gradle.kts` 的 `signingConfigs`
+- 签名：keystore 文件不入库；密码与 alias 存于 GitHub Actions Secrets（KS_PASS / KEY_PASS / KEY_ALIAS），不写入任何文档或代码；本地构建需自行设 KS_FILE/KS_PASS/KEY_ALIAS/KEY_PASS 四个环境变量
   （release 直接复用此 keystore，正式发布前建议换正式证书）
 - **版本号约定**：每个功能批次 `versionName +0.1`（bug 修复 +0.01），`versionCode` 恒 +1。
-  当前 v1.7.3 / 18。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
+  当前 v1.7.2 / 17。改动必须同步升版本，改 `app/build.gradle.kts` 的 `defaultConfig`。
 
 ### 6.4 构建已知坑（沙箱实测，必读）
 
@@ -237,6 +233,11 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
 
 | 版本 | code | 主要内容 |
 |---|---|---|
+| 1.8.3 | 22 | 误判修复：无线调试关闭后 adbd「半死」（仍接受 TLS 握手但不执行命令）+ 系统 mDNS 幽灵通告，曾误报「发现 N 个无线调试服务但连接不上」。现候选验证区分 OK/半死(DEAD)/不可达(UNREACHABLE)，**只要出现半死信号即判定未开启**（显示「去开启」直达开发者选项）；抓取遇 ECONNREFUSED 显示友好提示（无线调试可能已关闭）而非裸异常 |
+| 1.8.2 | 21 | 本地化收尾：**补全英文缺口**（启动检查结果与实时阶段、连接/配对页、使用方法页、日志详情「复制原文/仅看此Tag」、首页统计行「共N行·耗时Nms」改为 UI 层本地化拼接、进程选择弹窗全双语）；实时页「进程」chip 与首页一致直弹应用选择器（删展开输入行）；**无线调试配对设备名 logcat-grabber → LogLab**（公钥注释同步；已配对设备重配后生效；内部 keystore ALIAS 与签名 keyAlias 不动，改名会破坏既有密钥）|
+| 1.8.1 | 20 | 修复与体验：**修 `Only one --pid argument can be provided.`**（logcat 只接受单 --pid，命令侧取首个 PID，结果侧 PID 集合过滤兜底不变）；「重新配对」断开通道 + 直跳连接页（此前通道保持连接，回首页看不到「未配对」）；**连接页 loopback 优先**（选设备连 127.0.0.1:端口 局域网 IP 回退、配对成功后 127.0.0.1 优先、扫描列表展示 127.0.0.1:端口）；实时页 + 共用状态栏完成双语；首页「进程」chip 直接弹应用选择器（删手动输入行）；芯片缩短（只看错误→错误 / 启动抓取→抓启动）|
+| 1.8.0 | 19 | ★ 体验大版本：**127.0.0.1 loopback 优先连接**（mDNS 只取端口，回环直连与网段无关，换 Wi-Fi 不失效不重扫；loopback 毫秒级失败 + 逐候选 echo 复验回滚，老版本局域网 IP 存档自动迁移）/**启动静默检查更新**（24h 节流，首页更新横幅 → 设置页自动弹更新框）/**更新对话框渲染 Release notes**（markdown 清理为纯文本）/崩溃页「今天/近7天」筛选 + 行内应用图标与名称（保留窗口放宽为 7 天）/关于页改底部面板（开源地址/Bug反馈 ibr@foxmail.com/太墟署名可点击）/首页芯片行调序（只看错误→启动抓取→缓冲区）/**应用内语言切换**（跟随系统/中文/English，AppCompat per-app locale 自动持久化，核心页面已抽取双语，长尾页面 v1.8.x 补全）/README 双语（英文默认）/CHANGELOG.md |
+| 1.7.3 | 18 | 版本对齐（GitHub 网页端修改）：versionCode 18 / versionName 1.7.3，修复 tag 与 versionName 错位导致「检查更新」死循环 |
 | 1.0.0 | 1 | 初版：内嵌 ADB 抓取、无线配对、LogFox 风格 4 tab UI、启动智能检查、崩溃监控、导出、双通道、11 项安全加固 |
 | 1.1.0 | 2 | 首页信息架构重排（状态行合一/椭圆输入框/使用方法页/连接页独立）；配对端口现场扫描（未根治）；悬浮窗配对（后被移除）；设置页精简 |
 | 1.2.0 | 3 | 回退悬浮窗方案（ColorOS 受限设置无法授权），改为分屏配对引导 |
@@ -265,8 +266,11 @@ UI 可「只看启动后」。注意 `buildStartup` **不带 --pid**（目标进
    未来若支持「抓别的手机」需显式区分目标设备。
 3. **logview/导出大文件**：导出走 FileProvider 分享，超大日志（>10 万行）未做流式优化。
 4. **keystore**：现用 debug keystore 签 release，正式分发前务必换。
-5. **可选迭代方向**：日志高亮规则自定义、按进程/Tag 保存筛选预设、导出为 zip+按级别分文件、
-   英文本地化（resourceConfigurations 已含 en）、Play 商店合规化（前景 icon 512、隐私政策页）。
+5. **国际化长尾**：v1.8.0 已完成语言切换框架（AppCompat per-app locale）与核心页面双语
+   （导航/抓取/崩溃/设置/更新对话框），连接页/使用方法页/导出页/LogView/动态状态消息仍为中文硬编码，
+   后续版本抽入 res/values-en。语言存储由 AppCompat autoStoreLocales 自管，勿再往 AppSettings 加 language 字段。
+6. **可选迭代方向**：日志高亮规则自定义、按进程/Tag 保存筛选预设、导出为 zip+按级别分文件、
+   Play 商店合规化（前景 icon 512、隐私政策页）。
 
 ---
 
@@ -287,4 +291,4 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 #    App 首页点状态行 → 连接页 → 按分屏引导配对（详见使用方法页图文）
 ```
 
-有任何与本文冲突的实现细节，以代码为准；本文档对应 v1.6.4（versionCode 14）。
+有任何与本文冲突的实现细节，以代码为准；本文档对应 v1.8.3（versionCode 22）。
