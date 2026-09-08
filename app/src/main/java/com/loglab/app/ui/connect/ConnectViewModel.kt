@@ -1,10 +1,12 @@
 package com.loglab.app.ui.connect
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loglab.app.R
 import com.loglab.app.core.adb.AdbKeyStore
 import com.loglab.app.core.adb.AdbPairing
 import com.loglab.app.core.adb.NsdDiscovery
@@ -13,6 +15,7 @@ import com.loglab.app.core.channel.ChannelPolicy
 import com.loglab.app.data.model.AppSettings
 import com.loglab.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,9 +29,13 @@ import javax.inject.Inject
 /**
  * 连接页 ViewModel：承载全部「连接设备」相关操作。
  * 从设置页抽离而来 —— 连接是任务，设置只管偏好。
+ *
+ * 用户可见消息用 context.getString 生成（跟随 per-app locale；
+ * Android ≤12 上 Application 层不随语言切换即时刷新，操作后重新生成即正确）。
  */
 @HiltViewModel
 class ConnectViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
     val channelManager: ChannelManager,
     private val keyStore: AdbKeyStore,
@@ -81,7 +88,7 @@ class ConnectViewModel @Inject constructor(
         if (scanning) return
         viewModelScope.launch {
             scanning = true
-            scanMessage = "正在扫描附近的无线调试设备…"
+            scanMessage = context.getString(R.string.scan_start)
             val devices = withContext(Dispatchers.IO) {
                 runCatching { nsd.discover(7000).toList().lastOrNull() ?: emptyList() }
                     .getOrDefault(emptyList())
@@ -98,8 +105,8 @@ class ConnectViewModel @Inject constructor(
 
             scanMessage = when {
                 devices.isEmpty() ->
-                    "未发现设备。部分厂商（如 ColorOS）会禁用扫描，可展开「手动填写地址」填入无线调试主界面的 IP:端口"
-                else -> "找到 ${devices.size} 个服务，点「无线调试」即可连接；配对端口已自动填入"
+                    context.getString(R.string.scan_none_hint)
+                else -> context.getString(R.string.scan_found_fmt, devices.size)
             }
             scanning = false
         }
@@ -109,14 +116,34 @@ class ConnectViewModel @Inject constructor(
     fun chooseDevice(device: NsdDiscovery.Device) {
         // 配对端口是每次点开配对弹窗随机的临时端口，配对后即失效——拦截，别让用户踩坑
         if (device.kind == NsdDiscovery.Kind.PAIRING) {
-            scanMessage = "${device.host}:${device.port} 是配对端口，仅用于一次性配对，不能抓日志，请选择「无线调试」那一项"
+            scanMessage = context.getString(R.string.pairing_port_only_fmt, device.host, device.port)
             return
         }
         viewModelScope.launch {
-            settings.update { it.copy(adbHost = device.host, adbPort = device.port) }
+            // loopback 优先（与 StartupCheck 策略一致）：App 与 adbd 同机，
+            // 127.0.0.1 与网段无关——mDNS 只用来获取当前端口，host 弃用。
+            settings.update { it.copy(adbHost = "127.0.0.1", adbPort = device.port) }
             val conn = channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
-            scanMessage = if (conn.isSuccess) "已连接 ${device.host}:${device.port}"
-            else "已填入 ${device.host}:${device.port}，但连接失败：${conn.exceptionOrNull()?.message ?: "请确认无线调试已开启"}"
+            if (conn.isSuccess) {
+                scanMessage = context.getString(R.string.scan_connected_fmt, device.port)
+                return@launch
+            }
+            // 回退 mDNS 解析的局域网 IP（极端 ROM 不监听回环）
+            val connFallback = runCatching {
+                settings.update { it.copy(adbHost = device.host) }
+                channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
+            }.getOrNull()
+            scanMessage = if (connFallback?.isSuccess == true) {
+                context.getString(R.string.scan_connected_fallback_fmt, device.host, device.port)
+            } else {
+                context.getString(
+                    R.string.connect_failed_fmt,
+                    device.port,
+                    connFallback?.exceptionOrNull()?.message
+                        ?: conn.exceptionOrNull()?.message
+                        ?: context.getString(R.string.confirm_adb_on)
+                )
+            }
         }
     }
 
@@ -127,12 +154,14 @@ class ConnectViewModel @Inject constructor(
     fun probe() {
         viewModelScope.launch {
             probing = true
-            probeMessage = "探测中…"
+            probeMessage = context.getString(R.string.probing_fmt)
             val ok = withContext(Dispatchers.IO) { channelManager.adbChannel.probe() }
             probeMessage = if (ok) {
-                "ADB: 可用"
+                context.getString(R.string.probe_ok)
             } else {
-                "ADB: 不可用${channelManager.adbChannel.lastError?.let { "：$it" } ?: "，请确认无线调试已开启"}"
+                channelManager.adbChannel.lastError
+                    ?.let { context.getString(R.string.probe_unavailable_err_fmt, it) }
+                    ?: context.getString(R.string.probe_unavailable_plain)
             }
             probing = false
         }
@@ -146,15 +175,13 @@ class ConnectViewModel @Inject constructor(
             // 进入页面时扫不到是正常的，点开始配对时现场扫描补齐
             var port = pairPort.trim().toIntOrNull()
             if (port == null) {
-                pairingMessage = "正在识别配对端口…（请确保系统里已打开「使用配对码配对设备」弹窗）"
+                pairingMessage = context.getString(R.string.pair_detecting_port)
                 val found = withContext(Dispatchers.IO) {
                     runCatching { nsd.discover(4000).toList().lastOrNull() ?: emptyList() }
                         .getOrDefault(emptyList())
                 }.firstOrNull { it.kind == NsdDiscovery.Kind.PAIRING }?.port
                 if (found == null) {
-                    pairingMessage =
-                        "未能自动获取配对端口（部分系统会限制 mDNS 扫描）：" +
-                            "请把配对弹窗上显示的「IP 和端口」里的端口数字，填到「端口(可选)」框里，再点一次「开始配对」"
+                    pairingMessage = context.getString(R.string.pair_port_not_found)
                     pairingInProgress = false
                     return@launch
                 }
@@ -164,11 +191,11 @@ class ConnectViewModel @Inject constructor(
             }
             val code = pairCode.trim()
             if (code.length < 6) {
-                pairingMessage = "请输入 6 位配对码"
+                pairingMessage = context.getString(R.string.pair_need_6)
                 pairingInProgress = false
                 return@launch
             }
-            pairingMessage = "正在配对…"
+            pairingMessage = context.getString(R.string.pairing_now)
             // host 兜底：手动填端口的新用户 adbHost 可能为空，空串传给 pair 会直接失败
             val pairHost = settings.current().adbHost.ifBlank { "127.0.0.1" }
             val result = withContext(Dispatchers.IO) { pairing.pair(pairHost, port, code) }
@@ -180,20 +207,20 @@ class ConnectViewModel @Inject constructor(
                         .getOrDefault(emptyList())
                 }
                 // 只认真正能抓日志的服务，避免把刚失效的配对端口当成 adbd 端口
-                val discoveredPort = devices.firstOrNull { it.kind == NsdDiscovery.Kind.TLS_CONNECT }?.port
-                    ?: devices.firstOrNull { it.kind != NsdDiscovery.Kind.PAIRING }?.port
-                    ?: settings.current().adbPort
+                val discovered = devices.firstOrNull { it.kind == NsdDiscovery.Kind.TLS_CONNECT }
+                    ?: devices.firstOrNull { it.kind != NsdDiscovery.Kind.PAIRING }
+                val discoveredPort = discovered?.port ?: settings.current().adbPort
                 settings.update { it.copy(adbPort = discoveredPort) }
 
-                // 依次尝试多个候选主机：mDNS 发现的主机、配对时填写的主机、回环地址。
-                // 部分 ROM（如 ColorOS）下，App 连接设备自身的 WiFi IP 可能被厂商防火墙拦截，
-                // 而 127.0.0.1 / localhost 反而可达，因此多地址回退能显著提升连接成功率。
+                // loopback 优先（v1.8.1 起与 StartupCheck/选择设备策略一致）：
+                // App 与 adbd 同机，127.0.0.1 与网段无关，换 Wi-Fi 不失效；
+                // mDNS 解析 IP 与配对时填写的 IP 仅作回退。
+                // 注意用 "127.0.0.1" 字面量而非 localhost（部分 ROM 上 localhost
+                // 先解析 IPv6 ::1，adbd 只监听 IPv4 回环）。
                 val candidates = buildList {
-                    devices.firstOrNull { it.host == pairHost }?.host?.let { add(it) }
-                    devices.firstOrNull()?.host?.let { add(it) }
-                    if (pairHost.isNotBlank() && pairHost != "127.0.0.1" && pairHost != "localhost") add(pairHost)
                     add("127.0.0.1")
-                    add("localhost")
+                    discovered?.host?.let { if (it != "127.0.0.1") add(it) }
+                    if (pairHost.isNotBlank() && pairHost != "127.0.0.1") add(pairHost)
                 }.distinct()
 
                 var connected = false
@@ -203,13 +230,13 @@ class ConnectViewModel @Inject constructor(
                     val conn = channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
                     if (conn.isSuccess) {
                         connected = true
-                        pairingMessage = "配对成功 · 已连接（${host}:${discoveredPort}）"
+                        pairingMessage = context.getString(R.string.pair_success_connected_fmt, host, discoveredPort)
                         break
                     }
                     lastErr = conn.exceptionOrNull()?.message
                 }
                 if (!connected) {
-                    pairingMessage = "配对成功，但连接失败：$lastErr"
+                    pairingMessage = context.getString(R.string.pair_success_connect_failed_fmt, lastErr ?: "")
                 }
             } else {
                 pairingMessage = result.exceptionOrNull()?.message
@@ -223,7 +250,7 @@ class ConnectViewModel @Inject constructor(
      */
     fun installKeyToDevice() {
         viewModelScope.launch {
-            probeMessage = "正在写入公钥…"
+            probeMessage = context.getString(R.string.key_writing)
             val key = keyStore.exportPublicKeyText()
             val command = buildString {
                 append("mkdir -p /data/misc/adb; ")
@@ -238,8 +265,11 @@ class ConnectViewModel @Inject constructor(
                     channel.execute(command).getOrThrow()
                 }
             }
-            probeMessage = result.getOrNull()?.let { "公钥已写入，请重启 adbd 后重连" }
-                ?: "写入失败：${result.exceptionOrNull()?.message}"
+            probeMessage = result.getOrNull()?.let { context.getString(R.string.key_written) }
+                ?: context.getString(
+                    R.string.key_write_failed_fmt,
+                    result.exceptionOrNull()?.message ?: ""
+                )
         }
     }
 
