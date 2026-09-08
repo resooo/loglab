@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loglab.app.core.adb.NsdDiscovery
+import com.loglab.app.R
 import com.loglab.app.core.channel.ChannelType
 import com.loglab.app.ui.components.CopyableText
 import com.loglab.app.ui.components.EllipseTextField
@@ -72,10 +74,10 @@ fun ConnectScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("连接设备") },
+            title = { Text(stringResource(R.string.connect_title)) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                 }
             }
         )
@@ -91,7 +93,7 @@ fun ConnectScreen(
             if (channelState.connected && channelState.type == ChannelType.ADB) {
                 StatusCard(
                     dotColor = Color(0xFF3DDC84),
-                    title = "已连接",
+                    title = stringResource(R.string.connected_short),
                     detail = channelState.deviceLabel.ifBlank { "${settings.adbHost}:${settings.adbPort}" },
                     container = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                 ) {
@@ -100,43 +102,43 @@ fun ConnectScreen(
                             onClick = { viewModel.scan() },
                             enabled = !viewModel.scanning,
                             modifier = Modifier.weight(1f)
-                        ) { Text(if (viewModel.scanning) "扫描中…" else "重新扫描") }
+                        ) { Text(if (viewModel.scanning) stringResource(R.string.scanning_fmt) else stringResource(R.string.rescan)) }
                         OutlinedButton(
                             onClick = { pairOpen = !pairOpen },
                             modifier = Modifier.weight(1f)
-                        ) { Text(if (pairOpen) "收起配对" else "重新配对") }
+                        ) { Text(if (pairOpen) stringResource(R.string.collapse_pairing) else stringResource(R.string.re_pair)) }
                     }
                 }
             } else {
                 StatusCard(
                     dotColor = Color(0xFFFFB74D),
-                    title = if (settings.adbPaired) "已配对，但当前未连接" else "尚未配对",
-                    detail = "配对建议用「分屏/小窗」：全程不切换应用，配对码不会被系统刷新",
+                    title = if (settings.adbPaired) stringResource(R.string.paired_not_connected) else stringResource(R.string.not_paired_short),
+                    detail = stringResource(R.string.pair_suggest_split),
                     container = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                 ) {
-                    Step("1", "先把本 App 挂成小窗：多任务界面长按本 App →「自由窗口」（或从侧边栏拖出）")
-                    Step("2", "在主屏幕进「开发者选项 → 无线调试 → 使用配对码配对设备」")
-                    Step("3", "照着主屏幕的码在下面输入 → 开始配对（配对弹窗保持打开）")
+                    Step("1", stringResource(R.string.pair_step1))
+                    Step("2", stringResource(R.string.pair_step2))
+                    Step("3", stringResource(R.string.pair_step3))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(modifier = Modifier.weight(1.6f)) {
                             EllipseTextField(
                                 value = viewModel.pairCode,
                                 onValueChange = viewModel::onPairCodeChange,
-                                placeholder = "配对码，例如 739 512",
-                                leadingLabel = "配对码"
+                                placeholder = stringResource(R.string.pair_code_hint),
+                                leadingLabel = stringResource(R.string.pair_code_label)
                             )
                         }
                         Box(modifier = Modifier.weight(1f)) {
                             EllipseTextField(
                                 value = viewModel.pairPort,
                                 onValueChange = viewModel::onPairPortChange,
-                                placeholder = "端口(可选)",
+                                placeholder = stringResource(R.string.pair_port_hint),
                                 leadingLabel = null
                             )
                         }
                     }
                     Text(
-                        "端口通常自动识别；扫不到时直接填配对弹窗上显示的端口（例如 43185）。",
+                        stringResource(R.string.pair_port_note),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -144,7 +146,7 @@ fun ConnectScreen(
                         onClick = viewModel::pair,
                         enabled = !viewModel.pairingInProgress,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (viewModel.pairingInProgress) "配对中…" else "开始配对") }
+                    ) { Text(if (viewModel.pairingInProgress) stringResource(R.string.pairing_fmt) else stringResource(R.string.start_pairing)) }
                 }
             }
             viewModel.pairingMessage?.let {
@@ -156,11 +158,13 @@ fun ConnectScreen(
                 onClick = { viewModel.scan() },
                 enabled = !viewModel.scanning,
                 modifier = Modifier.fillMaxWidth()
-            ) { Text(if (viewModel.scanning) "扫描中…" else "扫描附近的设备") }
+            ) { Text(if (viewModel.scanning) stringResource(R.string.scanning_fmt) else stringResource(R.string.scan_nearby)) }
             viewModel.scanMessage?.let { CopyableText(text = it) }
             viewModel.discoveredDevices.forEach { device ->
                 DeviceLine(
-                    text = "${device.host}:${device.port}",
+                    // loopback 方案：连接地址恒为 127.0.0.1:端口，mDNS 的 host 不再展示为主地址
+                    text = if (device.kind == NsdDiscovery.Kind.PAIRING) "${device.host}:${device.port}"
+                    else "127.0.0.1:${device.port}",
                     kind = device.label + if (device.serviceName.isNotBlank()) " · ${device.serviceName}" else "",
                     clickable = device.kind != NsdDiscovery.Kind.PAIRING
                 ) {
@@ -171,9 +175,9 @@ fun ConnectScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 
             // ==================== 折叠：手动填写地址 ====================
-            FoldSection("手动填写地址（扫描不到时用）") {
+            FoldSection(stringResource(R.string.fold_manual)) {
                 Text(
-                    "填「无线调试」主界面显示的 IP:端口（与配对端口不同，端口每次开关会变化）。",
+                    stringResource(R.string.manual_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -183,7 +187,7 @@ fun ConnectScreen(
                             value = settings.adbHost,
                             onValueChange = { host -> viewModel.update { it.copy(adbHost = host) } },
                             placeholder = "192.168.1.5",
-                            leadingLabel = "主机"
+                            leadingLabel = stringResource(R.string.host_label)
                         )
                     }
                     Box(modifier = Modifier.weight(1f)) {
@@ -192,7 +196,7 @@ fun ConnectScreen(
                             onValueChange = { port ->
                                 port.toIntOrNull()?.let { v -> viewModel.update { it.copy(adbPort = v) } }
                             },
-                            placeholder = "端口",
+                            placeholder = stringResource(R.string.port_label),
                             leadingLabel = null
                         )
                     }
@@ -200,21 +204,21 @@ fun ConnectScreen(
             }
 
             // ==================== 折叠：连接工具 ====================
-            FoldSection("连接工具") {
+            FoldSection(stringResource(R.string.fold_tools)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = viewModel::probe, modifier = Modifier.weight(1f)) {
-                        Text(if (viewModel.probing) "探测中…" else "探测通道")
+                        Text(if (viewModel.probing) stringResource(R.string.probing_fmt) else stringResource(R.string.probe_channel))
                     }
                     OutlinedButton(
                         onClick = { viewModel.reconnect() },
                         modifier = Modifier.weight(1f)
-                    ) { Text("重新连接") }
+                    ) { Text(stringResource(R.string.reconnect)) }
                 }
                 viewModel.probeMessage?.let { CopyableText(text = it) }
             }
 
             // ==================== 折叠：ADB 公钥 ====================
-            FoldSection("ADB 公钥（高级）") {
+            FoldSection(stringResource(R.string.fold_pubkey)) {
                 viewModel.publicKey?.let { key ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -223,14 +227,14 @@ fun ConnectScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                         IconButton(onClick = { clipboard.setText(AnnotatedString(key)) }) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = "复制公钥")
+                            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.cd_copy_pubkey))
                         }
                     }
                 }
                 OutlinedButton(
                     onClick = viewModel::installKeyToDevice,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("写入设备 adb_keys（需 root）") }
+                ) { Text(stringResource(R.string.install_key)) }
             }
 
             Text(" ", style = MaterialTheme.typography.bodySmall)
