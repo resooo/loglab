@@ -16,10 +16,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.loglab.app.R
 import com.loglab.app.data.model.LogEntry
 import com.loglab.app.ui.theme.LogColors
 
@@ -87,12 +89,12 @@ fun LogLineSheet(
                 OutlinedButton(
                     onClick = { onCopy(entry.raw) },
                     modifier = Modifier.weight(1f)
-                ) { Text("复制原文") }
+                ) { Text(stringResource(R.string.log_copy_raw)) }
                 if (onTagFilter != null && entry.parsed && entry.tag.isNotBlank()) {
                     OutlinedButton(
                         onClick = { onTagFilter(entry.tag) },
                         modifier = Modifier.weight(1f)
-                    ) { Text("仅看此 Tag") }
+                    ) { Text(stringResource(R.string.log_filter_tag)) }
                 }
             }
         }
