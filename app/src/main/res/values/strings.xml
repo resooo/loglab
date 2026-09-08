@@ -6,4 +6,257 @@
     <string name="notification_channel_name">实时日志跟踪</string>
     <string name="notification_channel_desc">显示正在跟踪的应用与已捕获日志行数</string>
     <string name="tail_notification_title">正在实时跟踪日志</string>
+
+    <!-- ============ 底部导航 ============ -->
+    <string name="tab_capture">抓取</string>
+    <string name="tab_crash">崩溃</string>
+    <string name="tab_tail">实时</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- ============ 通用 ============ -->
+    <string name="copy">复制</string>
+    <string name="clear">清除</string>
+    <string name="share">分享</string>
+    <string name="more">更多</string>
+
+    <!-- ============ 抓取页 ============ -->
+    <string name="cd_guide">使用方法</string>
+    <string name="cd_filter">更多筛选</string>
+    <string name="cd_export">导出日志</string>
+    <string name="capture_start">开始抓取日志</string>
+    <string name="capture_running">抓取中…</string>
+    <string name="cd_copy_all">复制全部</string>
+    <string name="cd_clear_logs">清空日志</string>
+    <string name="errors_only">错误</string>
+    <string name="startup_capture">抓启动</string>
+    <string name="search_as_filter">搜索=过滤</string>
+    <string name="search_as_highlight">搜索=高亮</string>
+    <string name="search_hint">搜索日志…</string>
+    <string name="process">进程</string>
+    <string name="startup_point_line">启动点：第 %1$d 行</string>
+    <string name="startup_only_after">只看启动后</string>
+    <string name="update_banner">发现新版本 v%1$s，点此查看更新内容</string>
+    <string name="empty_capture_hint">连接成功后，点上方按钮即可抓取日志\n首次使用点右上角 ? 查看使用方法</string>
+
+    <!-- ============ 实时页 ============ -->
+    <string name="tail_rate_fmt">已捕获 %1$d 行 · %2$.1f 行/秒</string>
+    <string name="tail_start">开始跟踪</string>
+    <string name="tail_running">跟踪中…</string>
+    <string name="tail_pause">暂停</string>
+    <string name="tail_resume">继续</string>
+    <string name="tail_stop">停止</string>
+    <string name="tail_clear">清空</string>
+    <string name="tail_copied_lines_fmt">已复制 %1$d 行</string>
+    <string name="tail_search_hint">搜索实时日志…</string>
+    <string name="process_hint">包名，留空=全部进程</string>
+    <string name="cd_pick_package">选择包名</string>
+    <string name="tail_waiting">等待日志输出…</string>
+    <string name="tail_tap_start">点击「开始跟踪」</string>
+    <string name="tail_keywords_label">关键词</string>
+    <string name="tail_keywords_hint">关键词，逗号分隔</string>
+    <string name="tail_keywords_note">关键词在设备侧过滤（只回传命中行）；顶部搜索框在本机过滤/高亮，两者可叠加。</string>
+    <string name="tail_copied_line">已复制该行日志</string>
+
+    <!-- ============ 状态栏（首页/实时页共用） ============ -->
+    <string name="status_checking">正在检查 ADB 连接…</string>
+    <string name="connected_short">已连接</string>
+    <string name="status_go_enable">去开启</string>
+    <string name="status_go_connect">去连接</string>
+    <string name="status_retry">重试</string>
+
+    <!-- ============ 崩溃页 ============ -->
+    <string name="cd_stop_monitor">停止监控</string>
+    <string name="cd_start_monitor">开始监控</string>
+    <string name="cd_read_history">读取历史崩溃</string>
+    <string name="crash_range_today">今天</string>
+    <string name="crash_range_7d">近7天</string>
+    <string name="crash_monitoring">正在监控应用崩溃</string>
+    <string name="crash_not_monitoring">未开启监控</string>
+    <string name="crash_start">开始监控崩溃</string>
+    <string name="crash_guide_1">1. 点「开始监控崩溃」</string>
+    <string name="crash_guide_2">2. 去打开会闪退的应用，让它崩溃一次</string>
+    <string name="crash_guide_3">3. 回到这里，崩溃自动出现在列表</string>
+    <string name="crash_guide_history">崩溃发生在监控之前也没关系，点顶栏 ⏱ 可补抓历史崩溃</string>
+    <string name="crash_monitor_hint">去打开会闪退的应用，让它崩溃一次；崩溃发生后回到本页即可看到。</string>
+    <string name="crash_stop">停止监控</string>
+    <string name="crash_count">已捕获 %1$d 个崩溃</string>
+    <string name="crash_empty_list">还没有崩溃记录</string>
+    <string name="crash_empty_monitoring">还没有捕获到崩溃，去复现吧</string>
+    <string name="crash_copy_stack">复制堆栈</string>
+    <string name="crash_copied">已复制堆栈</string>
+    <string name="crash_cleared">已清空</string>
+    <string name="crash_menu_clear">清空记录</string>
+    <string name="cd_app_icon">应用图标</string>
+
+    <!-- ============ 设置页 ============ -->
+    <string name="section_status">状态</string>
+    <string name="connected_fmt">已连接 · %1$s</string>
+    <string name="disconnected">未连接</string>
+    <string name="paired">已配对（配对密钥保存在本机）</string>
+    <string name="unpaired">未配对</string>
+    <string name="reset_pairing">重新配对</string>
+    <string name="clear_address">清除连接地址</string>
+    <string name="toast_reset_pairing">已重置配对状态：回首页点状态行 → 连接页重新配对</string>
+    <string name="toast_clear_address">已清除连接地址，下次连接将重新扫描</string>
+    <string name="section_appearance">外观</string>
+    <string name="dark_theme">深色主题</string>
+    <string name="language">语言 / Language</string>
+    <string name="lang_follow_system">跟随系统</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_en">English</string>
+    <string name="section_diagnostics">诊断</string>
+    <string name="last_crash_report">上次崩溃报告</string>
+    <string name="toast_copied_crash_report">已复制崩溃报告</string>
+    <string name="run_log">运行日志</string>
+    <string name="no_log_yet">（暂无日志）</string>
+    <string name="cd_view_log">查看运行日志</string>
+
+    <!-- ============ 关于 ============ -->
+    <string name="section_about">关于</string>
+    <string name="current_version_fmt">当前版本 %1$s</string>
+    <string name="up_to_date">已是最新版本</string>
+    <string name="update_available_fmt">发现新版本 %1$s，点「检查更新」查看详情</string>
+    <string name="downloading_fmt">下载中 %1$d%%</string>
+    <string name="downloaded_ready">更新包已就绪，点「检查更新」可安装</string>
+    <string name="check_update">检查更新</string>
+    <string name="checking">检查中…</string>
+    <string name="about_loglab">关于 LogLab</string>
+    <string name="about_desc">内嵌 ADB 无线调试的日志抓取工具：无需 root、无需电脑、无需数据线，手机直接抓取手机日志。</string>
+    <string name="about_features">日志抓取 · 实时跟踪 · 一键导出 · 应用崩溃监控</string>
+    <string name="about_tech">技术：内嵌 ADB 协议实现（Kadb TLS 无线配对），支持 ADB 直连与 HostBridge 双通道。</string>
+    <string name="about_open_source">项目开源（GitHub）</string>
+    <string name="about_bug_feedback">Bug 反馈</string>
+    <string name="about_privacy_hint">提示：抓取的日志可能包含敏感信息，分享前请自行确认。</string>
+    <string name="built_by_prefix">本 APP 由 </string>
+    <string name="built_by_suffix"> 构建</string>
+    <string name="taixu">太墟</string>
+
+    <!-- ============ 更新对话框 ============ -->
+    <string name="no_release_notes">（无更新说明）</string>
+    <string name="apk_size_fmt">安装包 %1$s（%2$.1f MB）</string>
+    <string name="download_update">下载更新</string>
+    <string name="later">稍后</string>
+    <string name="downloading_update">正在下载更新</string>
+    <string name="download_progress_fmt">%1$d%%  ·  下载完成后可返回此处安装</string>
+    <string name="background_continue">后台继续</string>
+    <string name="update_downloaded_title">更新包已下载</string>
+    <string name="update_downloaded_body">点击「安装」拉起系统安装器。若提示无法安装，请先在系统设置中允许 LogLab「安装未知应用」。</string>
+    <string name="install">安装</string>
+    <string name="install_later">稍后再装</string>
+
+    <!-- ============ v1.8.2 启动检查结果/阶段（StartupCheck） ============ -->
+    <string name="check_phase_connecting">正在连接 %1$s:%2$d…</string>
+    <string name="check_phase_dead_port">端口无响应，正在扫描无线调试服务…</string>
+    <string name="check_phase_check_port">已连接，正在核对端口是否最新…</string>
+    <string name="check_phase_verifying">正在验证 %1$s:%2$d…</string>
+    <string name="check_phase_trying">正在尝试 %1$s:%2$d…</string>
+    <string name="check_phase_scanning">正在扫描无线调试服务…</string>
+    <string name="check_phase_waiting">正在等待无线调试服务通告…</string>
+    <string name="status_ready_fmt">ADB 已连接 %1$s:%2$d</string>
+    <string name="status_port_updated_fmt">检测到无线调试端口变化（%1$d → %2$d），已自动更新并连接</string>
+    <string name="status_need_pairing">尚未完成无线调试配对：请到「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，然后在 App 设置页完成配对</string>
+    <string name="status_debug_off">无线调试未开启，去开启</string>
+    <string name="status_not_reachable">已配对但无法连接，请确认手机「无线调试」已开启</string>
+    <string name="status_scan_none">未发现调试端口，请确认无线调试已开启！</string>
+    <string name="status_scan_resolve_fmt">未发现调试端口，请确认无线调试已开启！（mDNS 发现 %1$d 个服务但地址解析失败，系统 mDNS 受限，可在连接页手动填写 IP:端口）</string>
+    <string name="status_scan_startfail_fmt">未发现调试端口，请确认无线调试已开启！（mDNS 扫描启动失败：%1$s，可在连接页手动填写 IP:端口）</string>
+    <string name="status_scan_noresult">未发现调试端口，请确认无线调试已开启！（mDNS 扫描无任何结果：若开关确实开着，可能是系统限制了 mDNS，可在连接页手动填写 IP:端口）</string>
+    <string name="status_found_cant_connect_fmt">发现 %1$d 个无线调试服务但连接不上；直连探测：%2$s</string>
+    <string name="status_found_cant_connect_plain">发现 %1$d 个无线调试服务但连接不上</string>
+
+    <!-- ============ v1.8.2 连接设备页 ============ -->
+    <string name="connect_title">连接设备</string>
+    <string name="cd_back">返回</string>
+    <string name="rescan">重新扫描</string>
+    <string name="scanning_fmt">扫描中…</string>
+    <string name="collapse_pairing">收起配对</string>
+    <string name="re_pair">重新配对</string>
+    <string name="paired_not_connected">已配对，但当前未连接</string>
+    <string name="not_paired_short">尚未配对</string>
+    <string name="pair_suggest_split">配对建议用「分屏/小窗」：全程不切换应用，配对码不会被系统刷新</string>
+    <string name="pair_step1">先把本 App 挂成小窗：多任务界面长按本 App →「自由窗口」（或从侧边栏拖出）</string>
+    <string name="pair_step2">在主屏幕进「开发者选项 → 无线调试 → 使用配对码配对设备」</string>
+    <string name="pair_step3">照着主屏幕的码在下面输入 → 开始配对（配对弹窗保持打开）</string>
+    <string name="pair_code_label">配对码</string>
+    <string name="pair_code_hint">配对码，例如 739 512</string>
+    <string name="pair_port_hint">端口(可选)</string>
+    <string name="pair_port_note">端口通常自动识别；扫不到时直接填配对弹窗上显示的端口（例如 43185）。</string>
+    <string name="pairing_fmt">配对中…</string>
+    <string name="start_pairing">开始配对</string>
+    <string name="scan_nearby">扫描附近的设备</string>
+    <string name="fold_manual">手动填写地址（扫描不到时用）</string>
+    <string name="manual_note">填「无线调试」主界面显示的 IP:端口（与配对端口不同，端口每次开关会变化）。</string>
+    <string name="host_label">主机</string>
+    <string name="port_label">端口</string>
+    <string name="fold_tools">连接工具</string>
+    <string name="probing_fmt">探测中…</string>
+    <string name="probe_channel">探测通道</string>
+    <string name="reconnect">重新连接</string>
+    <string name="fold_pubkey">ADB 公钥（高级）</string>
+    <string name="cd_copy_pubkey">复制公钥</string>
+    <string name="install_key">写入设备 adb_keys（需 root）</string>
+    <string name="scan_start">正在扫描附近的无线调试设备…</string>
+    <string name="scan_none_hint">未发现设备。部分厂商（如 ColorOS）会禁用扫描，可展开「手动填写地址」填入无线调试主界面的 IP:端口</string>
+    <string name="scan_found_fmt">找到 %1$d 个服务，点「无线调试」即可连接；配对端口已自动填入</string>
+    <string name="pairing_port_only_fmt">%1$s:%2$d 是配对端口，仅用于一次性配对，不能抓日志，请选择「无线调试」那一项</string>
+    <string name="scan_connected_fmt">已连接 127.0.0.1:%1$d</string>
+    <string name="scan_connected_fallback_fmt">已连接 %1$s:%2$d（回环地址不通，已回退局域网地址）</string>
+    <string name="connect_failed_fmt">已填入 127.0.0.1:%1$d，但连接失败：%2$s</string>
+    <string name="confirm_adb_on">请确认无线调试已开启</string>
+    <string name="probe_ok">ADB: 可用</string>
+    <string name="probe_unavailable_plain">ADB: 不可用，请确认无线调试已开启</string>
+    <string name="probe_unavailable_err_fmt">ADB: 不可用：%1$s</string>
+    <string name="pair_detecting_port">正在识别配对端口…（请确保系统里已打开「使用配对码配对设备」弹窗）</string>
+    <string name="pair_port_not_found">未能自动获取配对端口（部分系统会限制 mDNS 扫描）：请把配对弹窗上显示的「IP 和端口」里的端口数字，填到「端口(可选)」框里，再点一次「开始配对」</string>
+    <string name="pair_need_6">请输入 6 位配对码</string>
+    <string name="pairing_now">正在配对…</string>
+    <string name="pair_success_connected_fmt">配对成功 · 已连接（%1$s:%2$d）</string>
+    <string name="pair_success_connect_failed_fmt">配对成功，但连接失败：%1$s</string>
+    <string name="key_writing">正在写入公钥…</string>
+    <string name="key_written">公钥已写入，请重启 adbd 后重连</string>
+    <string name="key_write_failed_fmt">写入失败：%1$s</string>
+
+    <!-- ============ v1.8.2 使用方法页 ============ -->
+    <string name="guide_title">使用方法</string>
+    <string name="guide_sec1">开始抓日志 · 三步</string>
+    <string name="guide_s1_1">打开「设置 → 开发者选项 → 无线调试」，保持开启</string>
+    <string name="guide_s1_2">点顶部状态行进连接页；配对建议分屏：多任务里长按本 App →「自由窗口」挂成小窗，再在主屏幕开「使用配对码配对设备」</string>
+    <string name="guide_s1_3">照着主屏幕的码在小窗里输入 → 开始配对（端口自动识别，配对只需一次）</string>
+    <string name="guide_s1_tip">注意：配对期间切走 App 或关闭弹窗，配对码和端口都会刷新——用分屏小窗可以避免。</string>
+    <string name="guide_sec2">分屏配对 · 图示</string>
+    <string name="guide_img1">① 右侧小窗里输配对码，主屏的配对弹窗保持打开</string>
+    <string name="guide_img2">② 配对成功自动连接；之后日常抓日志不用再配对</string>
+    <string name="guide_sec3">日常使用（配对完成后）</string>
+    <string name="guide_s3_1">打开「无线调试」开关</string>
+    <string name="guide_s3_2">打开本 App —— 自动连接，端口变了也会自动识别，不用手动改</string>
+    <string name="guide_s3_3">抓完日志：⋮ 复制全部 / 💾 保存成文件</string>
+    <string name="guide_s3_tip">「无线调试」是个开关：不用时可以关掉，下次要用再打开即可。</string>
+    <string name="guide_sec4">抓应用崩溃日志</string>
+    <string name="guide_s4_1">切到底部「崩溃」页，点「开始监控崩溃」</string>
+    <string name="guide_s4_2">去打开那个会闪退的应用，让它崩溃一次</string>
+    <string name="guide_s4_3">回到「崩溃」页，崩溃记录和堆栈自动出现，可复制、分享</string>
+    <string name="guide_sec5">连不上？按顺序试</string>
+    <string name="guide_s5_1">确认「无线调试」开关是打开的（最常见原因）</string>
+    <string name="guide_s5_2">首页点状态行 → 连接设备 → 「重新扫描」</string>
+    <string name="guide_s5_3">还不行：展开「手动填写地址」，照着无线调试主界面填 IP:端口</string>
+    <string name="guide_s5_tip">首次连接必须先配对一次；配对后换端口不用重新配对。</string>
+    <string name="guide_privacy">提示：抓取的日志可能包含敏感信息（账号、地址等），分享给别人前请自行确认。</string>
+
+    <!-- ============ v1.8.2 日志详情/进程选择/统计行 ============ -->
+    <string name="log_copy_raw">复制原文</string>
+    <string name="log_filter_tag">仅看此 Tag</string>
+    <string name="picker_title">选择应用</string>
+    <string name="picker_search_hint">搜索应用名或包名…</string>
+    <string name="cd_clear_search">清除搜索</string>
+    <string name="picker_loading">正在读取应用列表…</string>
+    <string name="picker_count_fmt">%1$d / %2$d 个应用（前台/运行中排在前）</string>
+    <string name="picker_empty">未获取到应用列表，请确认已连接后点「刷新」重试</string>
+    <string name="picker_no_match_fmt">没有匹配「%1$s」的应用</string>
+    <string name="picker_refresh">刷新</string>
+    <string name="picker_close">关闭</string>
+    <string name="badge_fg">前台</string>
+    <string name="badge_running">运行中</string>
+    <string name="picker_system_suffix">" · 系统"</string>
+    <string name="capture_stats_fmt">共 %1$d 行 · 耗时 %2$d ms</string>
+    <string name="capture_fail_adb_off">抓取失败：连接被拒绝——无线调试可能已关闭，开启后重试</string>
 </resources>
