@@ -103,6 +103,11 @@ class UpdateManager @Inject constructor(
 
     // ---------------- 检查更新 ----------------
 
+    /** 本机版本名（debug 包带 "-debug" 后缀，比较时 parseVersion 会按 '-' 截断） */
+    fun localVersion(): String = runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    }.getOrNull() ?: "0.0.0"
+
     /**
      * 拉取最新 Release；无新版返回 null，网络/解析失败抛异常由 UI 层兜底提示。
      * debug 包 versionName 带 "-debug" 后缀，parseVersion 已按 '-' 截断，无需特殊处理。
@@ -123,22 +128,42 @@ class UpdateManager @Inject constructor(
 
         if (!isNewer(release.tagName, localVersion)) return@withContext null
 
+        val notes = cleanNotes(release.body.orEmpty())
         val apk = release.assets.firstOrNull { it.name.endsWith(".apk") }
             ?: return@withContext UpdateInfo(
                 version = release.tagName.removePrefix("v"),
                 tag = release.tagName,
-                notes = release.body.orEmpty(),
+                notes = notes,
                 apkName = "", apkUrl = "", apkSize = 0
             )
         UpdateInfo(
             version = release.tagName.removePrefix("v"),
             tag = release.tagName,
-            notes = release.body.orEmpty(),
+            notes = notes,
             apkName = apk.name,
             apkUrl = apk.downloadUrl,
             apkSize = apk.size
         )
     }
+
+    /**
+     * 把 GitHub Release 的 markdown 正文转成适合弹窗阅读的纯文本：
+     * 去掉标题井号/加粗星号/行内代码反引号，链接只留文字，去掉列表连字符，压缩多余空行。
+     */
+    private fun cleanNotes(body: String): String =
+        body.lineSequence()
+            .map { raw ->
+                var line = raw.trim()
+                    .removePrefix("#").trim()
+                    .replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1")
+                    .replace(Regex("\\*([^*]+)\\*"), "$1")
+                    .replace(Regex("`([^`]+)`"), "$1")
+                    .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
+                if (line.startsWith("- ") || line.startsWith("* ")) line = line.substring(2).trim()
+                line
+            }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
 
     // ---------------- 下载 ----------------
 
