@@ -82,6 +82,11 @@ class AppInfoProvider @Inject constructor(
         logger.log("APPS", "加载图标失败 $packageName：${it.message}")
     }.getOrNull()
 
+    /** 应用名（label）：取不到返回 null，调用方回落到包名 */
+    fun labelOf(packageName: String): String? = runCatching {
+        pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+    }.getOrNull()
+
     /** 当前前台包名（dumpsys 取不到时返回 null，不影响主流程） */
     private suspend fun foregroundPackage(): String? {
         val channel = channelManager.active() ?: return null
