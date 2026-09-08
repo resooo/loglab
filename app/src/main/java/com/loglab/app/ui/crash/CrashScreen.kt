@@ -1,6 +1,7 @@
 package com.loglab.app.ui.crash
 
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -28,12 +30,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -46,15 +50,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.loglab.app.R
 import com.loglab.app.core.crash.CrashEvent
 
 /**
@@ -76,34 +84,36 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
     Column(modifier = Modifier.fillMaxSize()) {
         // ---- 顶栏：开始/历史/分享/清空 ----
         TopAppBar(
-            title = { Text("崩溃") },
+            title = { Text(stringResource(R.string.tab_crash)) },
             actions = {
                 if (monitoring) {
                     IconButton(onClick = viewModel::stop) {
-                        Icon(Icons.Default.Delete, contentDescription = "停止监控", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_stop_monitor), tint = MaterialTheme.colorScheme.error)
                     }
                 } else {
                     IconButton(onClick = viewModel::start) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "开始监控")
+                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.cd_start_monitor))
                     }
                 }
                 IconButton(onClick = viewModel::readHistory) {
-                    Icon(Icons.Default.History, contentDescription = "读取历史崩溃")
+                    Icon(Icons.Default.History, contentDescription = stringResource(R.string.cd_read_history))
                 }
                 IconButton(onClick = viewModel::shareAll, enabled = events.isNotEmpty()) {
-                    Icon(Icons.Default.Share, contentDescription = "分享")
+                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.share))
                 }
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    // stringResource 不能在 onClick（非 Composable 上下文）里调用，提前取好
+                    val clearedText = stringResource(R.string.crash_cleared)
                     DropdownMenuItem(
-                        text = { Text("清空记录") },
+                        text = { Text(stringResource(R.string.crash_menu_clear)) },
                         onClick = {
                             menuOpen = false
                             viewModel.clear()
                             selectedEvent = null
-                            Toast.makeText(context, "已清空", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, clearedText, Toast.LENGTH_SHORT).show()
                         },
                         enabled = events.isNotEmpty(),
                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
@@ -133,7 +143,7 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                         )
                 )
                 Text(
-                    if (monitoring) "正在监控应用崩溃" else "未开启监控",
+                    if (monitoring) stringResource(R.string.crash_monitoring) else stringResource(R.string.crash_not_monitoring),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -150,11 +160,30 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                 )
             }
 
+            // ---- 时间范围筛选：今天 / 近7天 ----
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                com.loglab.app.ui.crash.CrashRange.entries.forEach { r ->
+                    FilterChip(
+                        selected = viewModel.range == r,
+                        onClick = { viewModel.onRangeChange(r) },
+                        label = { Text(
+                            if (r == CrashRange.TODAY) stringResource(R.string.crash_range_today)
+                            else stringResource(R.string.crash_range_7d),
+                            fontSize = 12.sp
+                        ) }
+                    )
+                }
+            }
+
             // ---- 主区域 ----
             Box(modifier = Modifier.weight(1f)) {
+                val shownEvents = viewModel.filteredEvents
                 when {
                     // 空态：居中大按钮 + 三步引导（小白更直观，已确认保留）
-                    !monitoring && events.isEmpty() -> Column(
+                    !monitoring && shownEvents.isEmpty() -> Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(bottom = 48.dp),
@@ -165,7 +194,7 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                             onClick = viewModel::start,
                             modifier = Modifier.heightIn(min = 56.dp)
                         ) {
-                            Text("开始监控崩溃", fontSize = 17.sp)
+                            Text(stringResource(R.string.crash_start), fontSize = 17.sp)
                         }
                         Spacer(Modifier.width(4.dp))
                         Column(
@@ -173,11 +202,11 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("1. 点「开始监控崩溃」", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("2. 去打开会闪退的应用，让它崩溃一次", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("3. 回到这里，崩溃自动出现在列表", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.crash_guide_1), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.crash_guide_2), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.crash_guide_3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
-                                "崩溃发生在监控之前也没关系，点顶栏 ⏱ 可补抓历史崩溃",
+                                stringResource(R.string.crash_guide_history),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -190,37 +219,39 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                     ) {
                         if (monitoring) {
                             Text(
-                                "去打开会闪退的应用，让它崩溃一次；崩溃发生后回到本页即可看到。",
+                                stringResource(R.string.crash_monitor_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             OutlinedButton(
                                 onClick = viewModel::stop,
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("停止监控") }
+                            ) { Text(stringResource(R.string.crash_stop)) }
                         }
                         Text(
-                            "已捕获 ${events.size} 个崩溃",
+                            stringResource(R.string.crash_count, shownEvents.size),
                             style = MaterialTheme.typography.titleSmall
                         )
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            if (events.isEmpty()) {
+                            if (shownEvents.isEmpty()) {
                                 item {
                                     Text(
-                                        if (monitoring) "还没有捕获到崩溃，去复现吧" else "还没有崩溃记录",
+                                        if (monitoring) stringResource(R.string.crash_empty_monitoring) else stringResource(R.string.crash_empty_list),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(vertical = 24.dp)
                                     )
                                 }
                             }
-                            items(events.size) { index ->
-                                val event = events[index]
+                            items(shownEvents.size) { index ->
+                                val event = shownEvents[index]
                                 CrashRow(
                                     event = event,
+                                    icon = viewModel.icon(event.packageName),
+                                    appLabel = viewModel.appLabel(event),
                                     onClick = { selectedEvent = event }
                                 )
                                 HorizontalDivider(
@@ -238,6 +269,7 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
     // ---- 崩溃详情底部面板：完整堆栈 + 复制 ----
     selectedEvent?.let { event ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val copiedText = stringResource(R.string.crash_copied)
         ModalBottomSheet(
             onDismissRequest = { selectedEvent = null },
             sheetState = sheetState
@@ -277,54 +309,92 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                 OutlinedButton(
                     onClick = {
                         clipboard.setText(AnnotatedString(event.stack))
-                        Toast.makeText(context, "已复制堆栈", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("复制堆栈") }
+                ) { Text(stringResource(R.string.crash_copy_stack)) }
             }
         }
     }
 }
 
-/** 紧凑两行崩溃卡片：行1 包名+时间，行2 类型+摘要 */
+/** 紧凑两行崩溃卡片：行1 图标+应用名/包名+时间，行2 类型+摘要 */
 @Composable
 private fun CrashRow(
     event: CrashEvent,
+    icon: android.graphics.drawable.Drawable?,
+    appLabel: String?,
     onClick: () -> Unit
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                event.displayPackage,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+        // 应用图标：取不到时显示圆角占位（Native 崩溃等解析不到包名的场景）
+        if (icon != null) {
+            Image(
+                bitmap = remember(icon) { icon.toBitmap(64, 64).asImageBitmap() },
+                contentDescription = stringResource(R.string.cd_app_icon),
+                modifier = Modifier.size(36.dp)
             )
-            Text(
-                event.time,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        } else {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("?", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
-        Text(
-            // 摘要与类型相同时只显示一个，避免「Java 崩溃 · Java 崩溃」
-            if (event.summary.isNotBlank() && event.summary != event.type) {
-                "${event.type} · ${event.summary}"
-            } else {
-                event.type
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    // 有应用名显示应用名，包名作副标题省略；都没有显示未知应用
+                    appLabel ?: event.displayPackage,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    event.time,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                // 摘要与类型相同时只显示一个，避免「Java 崩溃 · Java 崩溃」
+                if (event.summary.isNotBlank() && event.summary != event.type) {
+                    "${event.type} · ${event.summary}"
+                } else {
+                    event.type
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            // 应用名与包名不同时补一行包名，便于定位具体应用
+            if (appLabel != null && event.packageName != null && appLabel != event.packageName) {
+                Text(
+                    event.displayPackage,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
