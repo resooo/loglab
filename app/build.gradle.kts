@@ -1,4 +1,3 @@
-import java.util.Properties
 import java.util.zip.ZipFile
 
 plugins {
@@ -8,13 +7,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-}
-
-// 本地签名凭据容器（不入库，见 .gitignore），格式：
-// storeFile=... / storePassword=... / keyAlias=... / keyPassword=...
-val keystoreProperties = Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -27,8 +19,8 @@ android {
         applicationId = "com.loglab.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.7.3"
+        versionCode = 22
+        versionName = "1.8.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += setOf("zh", "en")
@@ -42,24 +34,16 @@ android {
 
     signingConfigs {
         create("release") {
-            // 凭据来源优先级：
-            // 1. CI 环境变量：KS_FILE/KS_PASS/KEY_ALIAS/KEY_PASS（GitHub Actions secrets，见 release.yml）
-            // 2. 本地根目录 keystore.properties：storeFile/storePassword/keyAlias/keyPassword（不入库，见 .gitignore）
-            // 3. 均未配置时：回退 Android 标准 debug keystore，仅供本地出包验证，禁止作为发布签名分发
-            val ksFile = System.getenv("KS_FILE") ?: keystoreProperties.getProperty("storeFile")
-            val ksPass = System.getenv("KS_PASS") ?: keystoreProperties.getProperty("storePassword")
-            if (ksFile != null && ksPass != null) {
-                storeFile = file(ksFile)
-                storePassword = ksPass
-                keyAlias = System.getenv("KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
-                    ?: error("release 签名缺少 KEY_ALIAS：请在 CI 环境变量或 keystore.properties 中提供")
-                keyPassword = System.getenv("KEY_PASS") ?: keystoreProperties.getProperty("keyPassword") ?: ksPass
-            } else {
-                storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-                storePassword = "android"
-                keyAlias = "androiddebugkey"
-                keyPassword = "android"
-            }
+            // 本地：默认用 app/keystore/debug.jks（不入库，见 .gitignore），
+            //       密码优先环境变量 KS_PASS/KEY_PASS，其次根目录 keystore.pw.local（gitignore），
+            //       都没有则构建签名失败——密码不硬编码进仓库
+            // CI：由 GitHub Actions secrets 注入，与 .github/workflows/release.yml 配套
+            storeFile = file(System.getenv("KS_FILE") ?: "keystore/debug.jks")
+            storePassword = System.getenv("KS_PASS")
+                ?: rootProject.file("keystore.pw.local").takeIf { it.exists() }?.readText()?.trim()
+                ?: ""
+            keyAlias = System.getenv("KEY_ALIAS") ?: "logcatgrabber"
+            keyPassword = System.getenv("KEY_PASS") ?: storePassword
         }
     }
 
@@ -129,6 +113,8 @@ android {
 dependencies {
     // ---- AndroidX core ----
     implementation("androidx.core:core-ktx:1.16.0")
+    // AppCompat：MainActivity 继承 AppCompatActivity + per-app locale（应用内切换语言）
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
