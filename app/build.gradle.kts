@@ -12,8 +12,8 @@ plugins {
 android {
     namespace = "com.loglab.app"
     compileSdk = 35
-    // 沙箱内只能拿到 build-tools 34，显式锁定，避免 AGP 联网下载 35
-    buildToolsVersion = "34.0.0"
+    // 沙箱与 CI 均使用已就绪的 build-tools 35.0.0（34.0.0 为 x86_64，ARM 沙箱不可执行）
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.loglab.app"
