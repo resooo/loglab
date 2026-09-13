@@ -120,7 +120,8 @@ class StartupCheck @Inject constructor(
     private val settings: SettingsRepository,
     private val nsd: NsdDiscovery,
     private val channelManager: ChannelManager,
-    private val logger: com.loglab.app.core.report.AppLogger
+    private val logger: com.loglab.app.core.report.AppLogger,
+    private val nsdCacheCleaner: com.loglab.app.core.adb.NsdCacheCleaner
 ) {
     /** 当前检查阶段（供 UI 在"检查中"时显示到哪一步了，避免用户以为卡死） */
     private val _phase = MutableStateFlow(CheckPhase())
@@ -323,9 +324,21 @@ class StartupCheck @Inject constructor(
             .sortedWith(
                 compareBy(
                     { it.kind != NsdDiscovery.Kind.TLS_CONNECT },
+                    // 退出时被证伪的端口（旧 mDNS 缓存残留）排到最后：
+                    // 即便系统仍返回旧记录，也优先尝试其他候选
+                    { nsd.isStale(it.port) },
                     { it.port == cur.adbPort }
                 )
             )
+        // 上报本轮扫描端口，供 App 退出时统一探活/证伪
+        nsdCacheCleaner.reportScannedPorts(devices.map { it.port })
+        devices.filter { nsd.isStale(it.port) }.takeIf { it.isNotEmpty() }?.let { stale ->
+            logger.log(
+                "CHECK",
+                "mDNS 返回 ${stale.size} 个上次退出时已证伪的端口（系统缓存残留），已降级处理：" +
+                    stale.joinToString { "${it.port}" }
+            )
+        }
         for (dev in candidates) {
             for ((host, port) in addrCandidates(dev.port)) {
                 setPhase(R.string.check_phase_trying, host, port)

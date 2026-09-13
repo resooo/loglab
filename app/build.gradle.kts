@@ -119,6 +119,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
+    // App 前后台/退出感知：用于退出时清理 mDNS 缓存
+    implementation("androidx.lifecycle:lifecycle-process:2.9.1")
 
     // ---- Compose (BOM 与 Kotlin 2.2 的 Compose Compiler 匹配) ----
     implementation(platform("androidx.compose:compose-bom:2025.08.00"))

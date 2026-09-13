@@ -10,6 +10,7 @@ import com.loglab.app.R
 import com.loglab.app.core.adb.AdbKeyStore
 import com.loglab.app.core.adb.AdbPairing
 import com.loglab.app.core.adb.NsdDiscovery
+import com.loglab.app.core.adb.NsdCacheCleaner
 import com.loglab.app.core.channel.ChannelManager
 import com.loglab.app.core.channel.ChannelPolicy
 import com.loglab.app.data.model.AppSettings
@@ -41,6 +42,7 @@ class ConnectViewModel @Inject constructor(
     private val keyStore: AdbKeyStore,
     private val pairing: AdbPairing,
     private val nsd: NsdDiscovery,
+    private val nsdCacheCleaner: NsdCacheCleaner,
     private val logger: com.loglab.app.core.report.AppLogger
 ) : ViewModel() {
 
@@ -94,6 +96,8 @@ class ConnectViewModel @Inject constructor(
                     .getOrDefault(emptyList())
             }
             discoveredDevices = devices
+            // 上报本轮端口，供 App 退出时探活/证伪
+            nsdCacheCleaner.reportScannedPorts(devices.map { it.port })
 
             // 自动填配对端口（仅当用户还没填时）
             if (pairPort.isBlank()) {
