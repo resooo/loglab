@@ -35,17 +35,30 @@ class CrashStore @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /**
+     * 当前提示是否为「错误类」。
+     *
+     * v4 起提示文案已本地化，UI 不能再靠 contains("失败") 判断颜色——改由写入方
+     * 显式声明，避免英文/其它语言下颜色判断失效。
+     */
+    private val _messageIsError = MutableStateFlow(false)
+    val messageIsError: StateFlow<Boolean> = _messageIsError.asStateFlow()
+
     init {
         _events.value = load()
     }
 
     fun setMonitoring(running: Boolean) {
         _monitoring.value = running
-        if (running) _message.value = null
+        if (running) {
+            _message.value = null
+            _messageIsError.value = false
+        }
     }
 
-    fun setMessage(text: String?) {
+    fun setMessage(text: String?, isError: Boolean = false) {
         _message.value = text
+        _messageIsError.value = if (text == null) false else isError
     }
 
     /** 写入一条（最新在前），重复内容自动去重；返回是否真的新增 */

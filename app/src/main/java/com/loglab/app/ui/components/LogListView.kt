@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.loglab.app.R
 import com.loglab.app.data.model.LogEntry
 import com.loglab.app.ui.theme.LogColors
 import kotlinx.coroutines.launch
@@ -62,19 +64,26 @@ fun LogListView(
     highlight: String = "",
     autoScroll: Boolean = false,
     modifier: Modifier = Modifier,
-    emptyHint: String = "暂无日志",
+    emptyHint: String = "",
     reverseLayout: Boolean = false,
     onLineClick: ((LogEntry) -> Unit)? = null,
     copyFeedback: (String) -> Unit = {}
 ) {
     val clipboard = LocalClipboardManager.current
+    // v4：Toast 文案统一走资源，保证中英切换一致
+    val copiedLineText = stringResource(R.string.v4_toast_copied_line)
+    val defaultEmptyHint = stringResource(R.string.empty_capture_hint)
 
     if (entries.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(emptyHint, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            Text(
+                emptyHint.ifBlank { defaultEmptyHint },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp
+            )
         }
         return
     }
@@ -123,7 +132,7 @@ fun LogListView(
                     maxLines = if (expanded) Int.MAX_VALUE else 1,
                     onLongClick = {
                         clipboard.setText(AnnotatedString(entry.raw))
-                        copyFeedback("已复制该行日志")
+                        copyFeedback(copiedLineText)
                     },
                     onClick = {
                         if (onLineClick != null) onLineClick(entry)
@@ -177,22 +186,18 @@ private fun LogLine(
 ) {
     val family = if (monoFont) FontFamily.Monospace else FontFamily.Default
     val levelColor = LogColors.forPriority(entry.priority)
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val primary = MaterialTheme.colorScheme.primary
 
     // 富文本构建成本高（逐字符定位高亮区间），必须缓存：
     // 否则每次重组都重建，大列表快速滑动时主线程海量分配，造成卡顿甚至闪退。
     // key 含 id（内容唯一）+ 主题相关色值，保证任何依赖变化时正确重建。
-    val annotated = remember(entry.id, fontSize, monoFont, highlight, muted, levelColor, primary) {
+    val annotated = remember(entry.id, fontSize, monoFont, highlight, levelColor, primary) {
         buildAnnotatedString {
-            if (entry.timestamp.isNotEmpty()) {
-                append(entry.timestamp)
-                addStyle(SpanStyle(color = muted, fontSize = (fontSize - 1).sp), 0, entry.timestamp.length)
-                append("  ")
-            }
-            val prefixLength = length
+            // ★ 列表内不显示行首时间戳（entry.timestamp），只渲染级别 + Tag + 正文。
+            //   时间仍保留在 LogEntry.raw 里：详情面板、长按复制、导出都拿的是 raw。
             if (entry.parsed) {
                 val level = "[${entry.priority}]"
+                val prefixLength = length
                 append(level)
                 addStyle(SpanStyle(color = levelColor, fontSize = fontSize.sp), prefixLength, prefixLength + level.length)
                 append(" ")
@@ -206,7 +211,7 @@ private fun LogLine(
                 append(": ")
                 append(entry.message)
             } else {
-                append(entry.raw.substringAfter(entry.timestamp))
+                append(entry.rawWithoutTimestamp)
             }
 
             if (highlight.isNotBlank()) {

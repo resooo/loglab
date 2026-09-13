@@ -36,7 +36,7 @@
     <string name="startup_point_line">启动点：第 %1$d 行</string>
     <string name="startup_only_after">只看启动后</string>
     <string name="update_banner">发现新版本 v%1$s，点此查看更新内容</string>
-    <string name="empty_capture_hint">连接成功后，点上方按钮即可抓取日志\n首次使用点右上角 ? 查看使用方法</string>
+    <string name="empty_capture_hint">连接成功后，点右下角「抓取」按钮即可抓取日志\n首次使用可点右上角 ⋮ →「使用方法」查看引导</string>
 
     <!-- ============ 实时页 ============ -->
     <string name="tail_rate_fmt">已捕获 %1$d 行 · %2$.1f 行/秒</string>
@@ -86,6 +86,7 @@
     <string name="crash_copied">已复制堆栈</string>
     <string name="crash_cleared">已清空</string>
     <string name="crash_menu_clear">清空记录</string>
+    <string name="crash_menu_diagnostics">分享诊断信息</string>
     <string name="cd_app_icon">应用图标</string>
 
     <!-- ============ 设置页 ============ -->
@@ -100,16 +101,42 @@
     <string name="toast_clear_address">已清除连接地址，下次连接将重新扫描</string>
     <string name="section_appearance">外观</string>
     <string name="dark_theme">深色主题</string>
+    <string name="dark_theme_sub">深色背景下查看日志更护眼</string>
+    <string name="dynamic_color">动态取色</string>
+    <string name="dynamic_color_sub">跟随系统壁纸调整强调色（Android 12+）</string>
     <string name="language">语言 / Language</string>
     <string name="lang_follow_system">跟随系统</string>
     <string name="lang_zh">中文</string>
     <string name="lang_en">English</string>
     <string name="section_diagnostics">诊断</string>
     <string name="last_crash_report">上次崩溃报告</string>
+    <string name="last_crash_report_sub">App 闪退时自动留存，供反馈定位</string>
+    <string name="no_crash_report">暂无崩溃报告</string>
     <string name="toast_copied_crash_report">已复制崩溃报告</string>
     <string name="run_log">运行日志</string>
+    <string name="run_log_sub">记录连接、抓取、配对等关键事件</string>
     <string name="no_log_yet">（暂无日志）</string>
     <string name="cd_view_log">查看运行日志</string>
+
+    <!-- ============ 设置页：状态卡补充 ============ -->
+    <string name="settings_status_sub_connected">无线调试通道已就绪，可以抓日志了</string>
+    <string name="settings_status_sub_disconnected">点这里进连接页开启无线调试</string>
+    <string name="settings_pairing">配对状态</string>
+    <string name="settings_pairing_sub_paired">配对密钥已保存在本机</string>
+    <string name="settings_pairing_sub_unpaired">尚未配对，需先在连接页完成配对</string>
+    <string name="settings_fallback">连接兜底操作</string>
+    <string name="settings_fallback_sub">连接异常时用：重置配对或清掉记住的地址</string>
+
+    <!-- ============ 设置页：卡片样式补充 ============ -->
+    <string name="language_sub">切换界面语言，立即生效</string>
+    <string name="clear_address_short">清地址</string>
+    <string name="paired_short">已配对</string>
+    <string name="about_desc_short">内嵌 ADB 无线调试的日志抓取工具</string>
+    <string name="check_update_hint">点右侧按钮检查是否有新版本</string>
+    <string name="update_found_fmt">发现新版本 %1$s</string>
+    <string name="v4_status_connected_short">已连接</string>
+    <string name="v4_status_off_short">未连接</string>
+    <string name="v4_status_none_short">无</string>
 
     <!-- ============ 关于 ============ -->
     <string name="section_about">关于</string>
@@ -200,7 +227,6 @@
     <string name="scan_found_fmt">找到 %1$d 个服务，点「无线调试」即可连接；配对端口已自动填入</string>
     <string name="pairing_port_only_fmt">%1$s:%2$d 是配对端口，仅用于一次性配对，不能抓日志，请选择「无线调试」那一项</string>
     <string name="scan_connected_fmt">已连接 127.0.0.1:%1$d</string>
-    <string name="scan_connected_fallback_fmt">已连接 %1$s:%2$d（回环地址不通，已回退局域网地址）</string>
     <string name="connect_failed_fmt">已填入 127.0.0.1:%1$d，但连接失败：%2$s</string>
     <string name="confirm_adb_on">请确认无线调试已开启</string>
     <string name="probe_ok">ADB: 可用</string>
@@ -259,4 +285,115 @@
     <string name="picker_system_suffix">" · 系统"</string>
     <string name="capture_stats_fmt">共 %1$d 行 · 耗时 %2$d ms</string>
     <string name="capture_fail_adb_off">抓取失败：连接被拒绝——无线调试可能已关闭，开启后重试</string>
+
+    <!-- ══════════ v4 布局：通用动作 ══════════ -->
+    <string name="v4_cancel">取消</string>
+    <string name="v4_apply">应用</string>
+    <string name="v4_done">完成</string>
+    <string name="v4_reset">重置</string>
+    <string name="v4_seconds">秒</string>
+    <string name="v4_on">开</string>
+    <string name="v4_off">关</string>
+
+    <!-- ══════════ v4 布局：顶栏状态点 ══════════ -->
+    <string name="v4_cd_status_dot">连接状态，点击进入连接页</string>
+    <string name="v4_cd_search">搜索日志</string>
+    <string name="v4_cd_filter">筛选与抓取设置</string>
+    <string name="v4_cd_copy">复制全部日志</string>
+    <string name="v4_cd_clear">清空日志</string>
+    <string name="v4_cd_more">更多</string>
+
+    <!-- ══════════ v4 布局：高频行 / FAB ══════════ -->
+    <string name="v4_fab_capture">开始</string>
+    <string name="v4_fab_stop">停止</string>
+    <string name="v4_process_placeholder">选进程</string>
+
+    <!-- ══════════ v4 布局：统计行 ══════════ -->
+    <string name="v4_stats_recent_fmt">最近 %1$d 行 · 用时 %2$s</string>
+    <string name="v4_stats_crash_fmt">今天 · %1$d 条记录</string>
+    <string name="v4_stats_crash_range_fmt">%1$s · %2$d 条记录</string>
+    <string name="v4_stats_tail_fmt">显示 %1$d 行 · %2$.1f 行/秒</string>
+
+    <!-- ══════════ v4 布局：居中状态卡 ══════════ -->
+    <string name="v4_status_checking">正在检测连接…</string>
+    <string name="v4_status_round_fmt">第 %1$d/%2$d 轮</string>
+    <string name="v4_status_waiting_round_fmt">正在等待无线调试服务通告（第 %1$d/%2$d 轮）</string>
+    <string name="v4_status_scanning_round_fmt">正在扫描无线调试端口（第 %1$d/%2$d 轮）</string>
+    <string name="v4_status_debug_off">无线调试未开启</string>
+    <string name="v4_status_debug_off_sub">已等待 %1$d 轮仍无可用端口</string>
+    <string name="v4_status_no_channel">尚未建立 ADB 通道</string>
+    <string name="v4_go_enable">去开启无线调试</string>
+    <string name="v4_go_connect">去连接</string>
+    <string name="v4_go_pair">去配对</string>
+    <string name="v4_retry">重试</string>
+
+    <!-- 失败态三分类：无线调试未开 / 未配对 / 已配对但连不上。
+         这三件事的引导动作完全不同，文案必须分开写，不能都叫「未连接」。 -->
+    <string name="v4_status_need_pairing">尚未完成配对</string>
+    <string name="v4_status_need_pairing_sub">无线调试已开启，但本机还没配对。\n去连接页点「使用配对码配对设备」后填 6 位配对码</string>
+    <string name="v4_status_not_reachable">连接不上设备</string>
+    <string name="v4_status_not_reachable_sub">已配对但没连上，通常是无线调试被关掉或端口变了。\n去连接页重新扫描即可</string>
+    <string name="dev_settings_manual_hint">没能打开系统设置，请手动前往：设置 → 系统 → 开发者选项 → 无线调试</string>
+
+    <!-- ══════════ v4 布局：⋮ 低频菜单 ══════════ -->
+    <string name="v4_menu_export">导出到文件</string>
+    <string name="v4_menu_startup">启动抓取</string>
+    <!-- 高频行里的启动抓取开关（⋮ 菜单项仍用上面那条长文案） -->
+    <string name="v4_switch_startup">抓启动</string>
+    <string name="v4_menu_buffers">缓冲区</string>
+    <string name="v4_menu_guide">使用方法</string>
+
+    <!-- ══════════ v4 布局：搜索层 ══════════ -->
+    <string name="v4_search_title">搜索日志</string>
+    <string name="v4_search_placeholder">输入关键字，实时过滤…</string>
+    <string name="v4_search_match_mode">匹配方式</string>
+    <string name="v4_search_mode_filter">过滤（只留命中）</string>
+    <string name="v4_search_mode_highlight">高亮（全留标黄）</string>
+    <string name="v4_search_recent">最近搜索</string>
+
+    <!-- ══════════ v4 布局：筛选层 ══════════ -->
+    <string name="v4_filter_title">筛选与抓取设置</string>
+    <string name="v4_filter_level">日志级别</string>
+    <string name="v4_filter_max_lines">最多保留行数</string>
+    <string name="v4_filter_buffers">缓冲区</string>
+    <string name="v4_filter_process_section">进程与其它</string>
+    <string name="v4_filter_app_label">应用</string>
+    <string name="v4_filter_app_unset">未选择</string>
+    <string name="v4_filter_startup_continue">启动抓取后继续</string>
+    <string name="v4_filter_startup_off">未开启</string>
+
+    <!-- ══════════ v4 布局：进程选择层 ══════════ -->
+    <string name="v4_picker_title">选择应用进程</string>
+    <string name="v4_picker_search_hint">搜索应用名或包名…</string>
+    <string name="v4_picker_clear">清除选择</string>
+
+    <!-- ══════════ v4 布局：崩溃页 ══════════ -->
+    <string name="v4_crash_start_monitor">开始监听</string>
+    <string name="v4_crash_stop_monitor">停止监听</string>
+    <string name="v4_crash_monitoring">监听中</string>
+    <string name="v4_crash_idle">未监听</string>
+    <!-- 右下角主 FAB：用户要求两个字 -->
+    <string name="v4_crash_monitor_fab">开始</string>
+
+    <!-- ══════════ v4 布局：对话框/Toast ══════════ -->
+    <string name="v4_toast_copied_lines_fmt">已复制 %1$d 行</string>
+    <string name="v4_toast_copied_line">已复制该行日志</string>
+    <string name="v4_toast_copied">已复制到剪贴板</string>
+
+    <!-- ══════════ v4 布局：运行期状态文案 ══════════ -->
+    <string name="capture_status_probing">正在探测通道…</string>
+    <string name="capture_need_package">启动抓取需要先填目标包名（点「进程 ▸」选择）</string>
+    <string name="capture_waiting_start_fmt">等待 %1$s 启动…（先收全量日志，不丢启动前现场）</string>
+    <string name="capture_startup_failed_fmt">启动抓取失败：%1$s</string>
+    <string name="capture_startup_done_fmt">启动抓取完成：%1$d 行 · PID %2$s · 等待 %3$ds</string>
+    <string name="capture_startup_done_point_fmt">启动抓取完成：%1$d 行 · PID %2$s · 等待 %3$ds · 启动点第 %4$d 行</string>
+    <string name="capture_startup_timeout_fmt">未等到 %1$s 启动（已超时），保留窗口内 %2$d 行</string>
+    <string name="capture_failed_fmt">抓取失败：%1$s</string>
+    <string name="tail_start_failed_fmt">启动失败：%1$s</string>
+    <string name="crash_msg_reading">正在读取历史崩溃…</string>
+    <string name="crash_msg_none">没有找到历史崩溃（最近 7 天内还没有应用崩溃过）</string>
+    <string name="crash_msg_found_fmt">读取到 %1$d 条历史崩溃（新增 %2$d 条）</string>
+    <string name="crash_msg_read_failed_fmt">读取失败：%1$s</string>
+    <string name="crash_msg_start_failed_fmt">启动失败：%1$s</string>
+    <string name="crash_msg_share_failed_fmt">分享失败：%1$s</string>
 </resources>

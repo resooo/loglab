@@ -55,6 +55,34 @@ class AppLogger @Inject constructor(@ApplicationContext context: Context) {
         buffer.takeLast(limit).joinToString("\n")
     }
 
+    /**
+     * 打包一份可直接发出来的诊断信息（运行日志 + 设备信息 + 崩溃记录摘要）。
+     *
+     * 存在理由：用户反馈"崩溃没显示出来"这类问题时，描述里看不见的是——监控到底
+     * 有没有连上 ADB、logcat 流有没有断、解析器认出了什么。把这些一次性给出来，
+     * 排查不必来回猜。只含流程节点与崩溃摘要，不含被跟踪的日志正文。
+     */
+    fun diagnostics(context: Context, crashDump: String): String = synchronized(lock) {
+        val log = buffer.takeLast(MAX_ENTRIES).joinToString("\n").ifBlank { "（运行日志为空）" }
+        return buildString {
+            append("===== LogLab 诊断信息 =====\n")
+            append("生成时间：").append(synchronized(fmt) { fmt.format(Date()) }).append('\n')
+            append("应用版本：").append(runCatching {
+                val pm = context.packageManager
+                val pi = pm.getPackageInfo(context.packageName, 0)
+                "${pi.versionName} (${pi.longVersionCode})"
+            }.getOrDefault("?")).append('\n')
+            append("设备：").append(android.os.Build.MANUFACTURER).append(' ')
+                .append(android.os.Build.MODEL)
+                .append(" · Android ").append(android.os.Build.VERSION.RELEASE)
+                .append(" (SDK ").append(android.os.Build.VERSION.SDK_INT).append(")\n")
+            append("\n===== 崩溃记录（内存）=====\n")
+            append(crashDump.ifBlank { "（无记录）" })
+            append("\n\n===== 运行日志 =====\n")
+            append(log).append('\n')
+        }
+    }
+
     fun clear() = synchronized(lock) {
         buffer.clear()
         runCatching { file.delete() }

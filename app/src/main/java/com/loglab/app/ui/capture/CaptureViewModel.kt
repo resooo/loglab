@@ -172,9 +172,20 @@ class CaptureViewModel @Inject constructor(
         startupResult = null
     }
 
+    /**
+     * 跳系统「开发者选项」，让用户去打开无线调试开关。
+     *
+     * ★ 只用于 [com.loglab.app.core.connect.StartupCheckResult.DebugOff]（无线调试未开启）：
+     *   那是「开关没打开」，不是「没配对」——两件事的引导动作不同，不能都甩到连接页。
+     */
+    fun openDevSettings() {
+        val ok = com.loglab.app.core.connect.DevSettingsLauncher.open(context)
+        logger.log("UI", if (ok) "已跳转开发者选项（无线调试未开启）" else "跳转开发者选项失败，已提示手动路径")
+    }
+
     fun connect() {
         viewModelScope.launch {
-            status = "正在探测通道…"
+            status = context.getString(R.string.capture_status_probing)
             val result = try {
                 channelManager.autoConnect(settings.policyOnce())
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -248,6 +259,12 @@ class CaptureViewModel @Inject constructor(
         tagFilters.remove(filter)
     }
 
+    /**
+     * 应用图标：进程选择器按需调用（LazyColumn 只对可见项请求）。
+     * 取不到返回 null，UI 用首字母占位块兜底。
+     */
+    fun iconFor(pkg: String): android.graphics.drawable.Drawable? = appInfoProvider.icon(pkg)
+
     fun showPicker(show: Boolean) {
         pickerVisible = show
         if (show) refreshApps()
@@ -302,29 +319,41 @@ class CaptureViewModel @Inject constructor(
             )
 
             if (startupMode && pkg == null) {
-                status = "启动抓取需要先填目标包名（点「进程 ▸」选择）"
+                status = context.getString(R.string.capture_need_package)
             } else if (startupMode && pkg != null) {
                 // 启动抓取：先收全量日志，轮询等目标进程出现
-                status = "等待 $pkg 启动…（先收全量日志，不丢启动前现场）"
+                status = context.getString(R.string.capture_waiting_start_fmt, pkg)
                 repository.captureStartup(pkg, config) { phase -> status = phase }
                     .onSuccess { r ->
                         entries = r.entries
                         startupPid = r.pid
                         startupIndex = r.startupIndex
                         status = if (r.pid != null) {
-                            "启动抓取完成：${r.entries.size} 行 · PID ${r.pid} · 等待 ${r.waitedMs / 1000}s" +
-                                if (r.startupIndex >= 0) " · 启动点第 ${r.startupIndex + 1} 行" else ""
+                            if (r.startupIndex >= 0) {
+                                context.getString(
+                                    R.string.capture_startup_done_point_fmt,
+                                    r.entries.size, r.pid.toString(),
+                                    r.waitedMs / 1000, r.startupIndex + 1
+                                )
+                            } else {
+                                context.getString(
+                                    R.string.capture_startup_done_fmt,
+                                    r.entries.size, r.pid.toString(), r.waitedMs / 1000
+                                )
+                            }
                         } else {
-                            "未等到 $pkg 启动（已超时），保留窗口内 ${r.entries.size} 行"
+                            context.getString(
+                                R.string.capture_startup_timeout_fmt, pkg, r.entries.size
+                            )
                         }
                         settings.rememberPackage(pkg)
                     }
                     .onFailure { error ->
-                        status = "启动抓取失败：${error.message}"
+                        status = context.getString(R.string.capture_startup_failed_fmt, error.message.orEmpty())
                         entries = emptyList()
                     }
             } else {
-                status = "抓取中…"
+                status = context.getString(R.string.capture_running)
                 val result = repository.capture(pkg, config)
                 lastDurationMs = System.currentTimeMillis() - startedAt
                 result.onSuccess { list ->
@@ -336,7 +365,7 @@ class CaptureViewModel @Inject constructor(
                 }.onFailure { error ->
                     status = if (error.message?.contains("ECONNREFUSED") == true)
                         context.getString(R.string.capture_fail_adb_off)
-                    else "抓取失败：${error.message}"
+                    else context.getString(R.string.capture_failed_fmt, error.message.orEmpty())
                     entries = emptyList()
                 }
             }

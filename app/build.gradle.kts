@@ -19,8 +19,8 @@ android {
         applicationId = "com.loglab.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.8.3"
+        versionCode = 27
+        versionName = "1.9.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += setOf("zh", "en")

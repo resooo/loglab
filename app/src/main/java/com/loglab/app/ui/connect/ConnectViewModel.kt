@@ -120,28 +120,17 @@ class ConnectViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            // loopback 优先（与 StartupCheck 策略一致）：App 与 adbd 同机，
-            // 127.0.0.1 与网段无关——mDNS 只用来获取当前端口，host 弃用。
+            // v1.8.4：连接地址恒为 127.0.0.1（App 与 adbd 同机，回环与网段无关；
+            // mDNS 只用来发现端口，解析出的 host 弃用）。
             settings.update { it.copy(adbHost = "127.0.0.1", adbPort = device.port) }
             val conn = channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
-            if (conn.isSuccess) {
-                scanMessage = context.getString(R.string.scan_connected_fmt, device.port)
-                return@launch
-            }
-            // 回退 mDNS 解析的局域网 IP（极端 ROM 不监听回环）
-            val connFallback = runCatching {
-                settings.update { it.copy(adbHost = device.host) }
-                channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
-            }.getOrNull()
-            scanMessage = if (connFallback?.isSuccess == true) {
-                context.getString(R.string.scan_connected_fallback_fmt, device.host, device.port)
+            scanMessage = if (conn.isSuccess) {
+                context.getString(R.string.scan_connected_fmt, device.port)
             } else {
                 context.getString(
                     R.string.connect_failed_fmt,
                     device.port,
-                    connFallback?.exceptionOrNull()?.message
-                        ?: conn.exceptionOrNull()?.message
-                        ?: context.getString(R.string.confirm_adb_on)
+                    conn.exceptionOrNull()?.message ?: context.getString(R.string.confirm_adb_on)
                 )
             }
         }
@@ -196,9 +185,8 @@ class ConnectViewModel @Inject constructor(
                 return@launch
             }
             pairingMessage = context.getString(R.string.pairing_now)
-            // host 兜底：手动填端口的新用户 adbHost 可能为空，空串传给 pair 会直接失败
-            val pairHost = settings.current().adbHost.ifBlank { "127.0.0.1" }
-            val result = withContext(Dispatchers.IO) { pairing.pair(pairHost, port, code) }
+            // v1.8.4：配对与连接地址恒 127.0.0.1（同机回环恒可达，与网段无关）
+            val result = withContext(Dispatchers.IO) { pairing.pair("127.0.0.1", port, code) }
             if (result.isSuccess) {
                 // 配对成功后用 mDNS 自动补齐 adbd 端口（配对端口配对后即失效，必须用 adbd 端口）
                 delay(800)
@@ -212,31 +200,18 @@ class ConnectViewModel @Inject constructor(
                 val discoveredPort = discovered?.port ?: settings.current().adbPort
                 settings.update { it.copy(adbPort = discoveredPort) }
 
-                // loopback 优先（v1.8.1 起与 StartupCheck/选择设备策略一致）：
-                // App 与 adbd 同机，127.0.0.1 与网段无关，换 Wi-Fi 不失效；
-                // mDNS 解析 IP 与配对时填写的 IP 仅作回退。
-                // 注意用 "127.0.0.1" 字面量而非 localhost（部分 ROM 上 localhost
-                // 先解析 IPv6 ::1，adbd 只监听 IPv4 回环）。
-                val candidates = buildList {
-                    add("127.0.0.1")
-                    discovered?.host?.let { if (it != "127.0.0.1") add(it) }
-                    if (pairHost.isNotBlank() && pairHost != "127.0.0.1") add(pairHost)
-                }.distinct()
-
-                var connected = false
-                var lastErr: String? = null
-                for (host in candidates) {
-                    settings.update { it.copy(adbHost = host) }
-                    val conn = channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
-                    if (conn.isSuccess) {
-                        connected = true
-                        pairingMessage = context.getString(R.string.pair_success_connected_fmt, host, discoveredPort)
-                        break
-                    }
-                    lastErr = conn.exceptionOrNull()?.message
-                }
-                if (!connected) {
-                    pairingMessage = context.getString(R.string.pair_success_connect_failed_fmt, lastErr ?: "")
+                // v1.8.4：连接地址恒 127.0.0.1（注意用字面量而非 localhost：
+                // 部分 ROM 上 localhost 先解析 IPv6 ::1，adbd 只监听 IPv4 回环）。
+                settings.update { it.copy(adbHost = "127.0.0.1") }
+                val conn = channelManager.autoConnect(ChannelPolicy.ADB_ONLY)
+                if (conn.isSuccess) {
+                    pairingMessage =
+                        context.getString(R.string.pair_success_connected_fmt, "127.0.0.1", discoveredPort)
+                } else {
+                    pairingMessage = context.getString(
+                        R.string.pair_success_connect_failed_fmt,
+                        conn.exceptionOrNull()?.message ?: ""
+                    )
                 }
             } else {
                 pairingMessage = result.exceptionOrNull()?.message

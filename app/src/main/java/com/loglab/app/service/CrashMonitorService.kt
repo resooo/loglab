@@ -105,9 +105,14 @@ class CrashMonitorService : android.app.Service() {
                 val since = "%02d-%02d 00:00:00.000".format(today.monthValue, today.dayOfMonth)
                 channelManager.adbChannel.executeStream("logcat -b crash -v time -T \"$since\"")
                     .collect { line ->
-                        parser.feed(line)?.let { store.add(it) }
+                        // ★ 段边界先于 feed 判断：feed 会「用新行结束旧块」，
+                        //   等它返回事件时新行已被吃掉，无法区分「刚结束的崩溃」与续行。
+                        //   这里在末行到达时就把上一段提前产出，解决崩溃缓冲区尾部静默
+                        //   导致的「已抓到但不显示」。
+                        if (parser.isSegmentBoundary(line)) parser.flush()?.let { publish(it) }
+                        parser.feed(line)?.let { publish(it) }
                     }
-                parser.flush()?.let { store.add(it) }
+                parser.flush()?.let { publish(it) }
                 scheduleRetry("日志流意外结束")
             } catch (e: CancellationException) {
                 throw e
@@ -118,9 +123,24 @@ class CrashMonitorService : android.app.Service() {
         }
     }
 
+    /**
+     * 入库一条捕获到的崩溃，并记录一条可诊断的运行日志。
+     *
+     * 加日志的原因：用户报「监控到了但没显示」时，光看 store 有没有数据无法判断
+     * 是被去重挡了、被 7 天窗口挡了，还是解析器压根没认出——把包名/类型/时间
+     * 连同入库结果一起写下来，设置页的运行日志里就能直接定位。
+     */
+    private fun publish(event: com.loglab.app.core.crash.CrashEvent) {
+        val added = store.add(event)
+        logger.log(
+            "CRASH",
+            "解析到崩溃：${event.packageName ?: "（未解析到包名）"} · ${event.type} · " +
+                "${event.time.ifEmpty { "（无时间）" }} · ${if (added) "已入库" else "已存在/超期，跳过"}"
+        )
+    }
+
     /** 断流自动重连（无线调试开关切换/网络抖动都会断一次），最多 5 次后放弃 */
-    private suspend fun scheduleRetry(reason: String) {
-        if (!store.monitoring.value) return
+    private suspend fun scheduleRetry(reason: String) {        if (!store.monitoring.value) return
         val n = retries.incrementAndGet()
         if (n > 5) {
             store.setMessage("多次重连失败（$reason），已停止监控，请检查网络后重新开始")

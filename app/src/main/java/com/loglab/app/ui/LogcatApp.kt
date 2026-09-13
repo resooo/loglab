@@ -54,8 +54,9 @@ fun LogcatApp() {
     val currentRoute = backStackEntry?.destination?.route?.substringBefore('?')
 
     Scaffold(
-        // 顶栏由各页面自带的 TopAppBar 处理状态栏避让（enableEdgeToEdge 下不重叠）；
-        // 这里只负责底部导航，insets 归零避免双重 padding
+        // 顶栏避让由各页面自己负责：v4 页面用自定义 V4TopBar（内部消费 statusBars inset），
+        // 二级页仍用 Material3 TopAppBar（自带 windowInsets）。这里 insets 归零，
+        // 只交给 bottomBar 的 NavigationBar 自己处理底部导航栏避让，避免双重 padding。
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (currentRoute in topRoutes) {

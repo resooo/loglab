@@ -1,56 +1,34 @@
 package com.loglab.app.ui.capture
 
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.composed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Stream
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,30 +36,54 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.loglab.app.R
+import com.loglab.app.core.connect.StartupCheckResult
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.data.model.LogEntry
-import com.loglab.app.ui.components.AppPickerDialog
-import com.loglab.app.ui.components.CopyableText
-import com.loglab.app.ui.components.EllipseTextField
-import com.loglab.app.ui.components.FilterDropdown
-import com.loglab.app.ui.components.HomeStatusBar
+import com.loglab.app.ui.components.AppPickerSheet
+import com.loglab.app.ui.components.FilterSheet
 import com.loglab.app.ui.components.LogLineSheet
 import com.loglab.app.ui.components.LogListView
+import com.loglab.app.ui.components.SearchSheet
+import com.loglab.app.ui.components.V4BarSpacer
+import com.loglab.app.ui.components.V4CaptureFab
+import com.loglab.app.ui.components.V4CenterStatus
+import com.loglab.app.ui.components.V4FabAction
+import com.loglab.app.ui.components.V4FabColumn
+import com.loglab.app.ui.components.V4MenuItem
+import com.loglab.app.ui.components.V4MenuSeparator
+import com.loglab.app.ui.components.V4OverflowMenu
+import com.loglab.app.ui.components.V4ProcessChip
+import com.loglab.app.ui.components.V4QuickActionBar
+import com.loglab.app.ui.components.V4RoundIconButton
+import com.loglab.app.ui.components.V4Spinner
+import com.loglab.app.ui.components.V4StatsLine
+import com.loglab.app.ui.components.V4StatusActions
+import com.loglab.app.ui.components.V4StatusButton
+import com.loglab.app.ui.components.V4StatusCard
+import com.loglab.app.ui.components.V4StatusSubtitle
+import com.loglab.app.ui.components.V4StatusTitle
+import com.loglab.app.ui.components.V4TopBar
+import com.loglab.app.ui.theme.V4
 
 /**
- * 首页（抓取页）：主按钮 C 位 + 状态一行 + 配置可见。
- *  - 状态行：启动智能检查与通道状态合并为一行，整行可点击 → 连接页；
- *  - 主按钮：状态行正下方，未连接时禁用变灰；
- *  - 配置摘要：当前抓取配置以芯片展示，点击打开筛选面板；
- *  - 顶栏「?」：使用方法介绍页。
+ * 首页（抓取页）—— v4 布局。
+ *
+ * 结构（自上而下）：
+ *  ① 顶栏一行：标题「抓取日志」+ 状态点（点它进连接页），不再有任何动作按钮；
+ *  ② 高频行一行：启动抓取开关 · 进程选择胶囊 · 搜索 · 筛选 · spacer · ⋮；
+ *  ③ 统计小字 → 日志区（占满剩余高度）；
+ *  ④ 右下角：主 FAB「开始」+ 上方 ⧉ / 🗑 次级按钮（通道连通后才出现）；
+ *  ⑤ 底部 4 个导航（在 LogcatApp 的 Scaffold 里）。
+ *
+ * 搜索/筛选/进程选择都是底部弹出层，页面上不再常驻输入框。
+ * 状态提示从常驻一行改为居中卡片浮层，成功类提示 4 秒后自动消失。
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureScreen(
     onGoConnect: () -> Unit = {},
@@ -92,12 +94,20 @@ fun CaptureScreen(
 ) {
     val settings by viewModel.appSettings.collectAsState()
     val channelState by viewModel.channelState.collectAsState()
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    var search by remember { mutableStateOf("") }
+    val checkPhase by viewModel.checkPhase.collectAsState()
+    val listState = rememberLazyListState()
+
+    // 搜索：v4 里由底部层「应用」写入，用 saveable 保证旋转/重建不丢
+    var search by rememberSaveable { mutableStateOf("") }
     // true=过滤（只留匹配行）；false=高亮（全留，命中处标黄）
-    var filterMode by remember { mutableStateOf(true) }
-    var filtersOpen by remember { mutableStateOf(false) }
+    var filterMode by rememberSaveable { mutableStateOf(true) }
+    var recentSearches by rememberSaveable { mutableStateOf(listOf<String>()) }
+
+    var searchOpen by remember { mutableStateOf(false) }
+    var filterOpen by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var selectedLine by remember { mutableStateOf<LogEntry?>(null) }
+
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -107,39 +117,95 @@ fun CaptureScreen(
         if (search.isBlank() || !filterMode) source
         else source.filter { it.raw.contains(search, ignoreCase = true) }
     }
-    // 高亮模式下也要标黄；过滤模式下剩下的行本来就命中，高亮同样有用
-    val highlight = search
+
+    // ---- 状态点颜色：橙=检测中 / 绿=已连接 / 黄=未配对或不可达 / 红=无线调试未开 ----
+    val statusColor = when {
+        viewModel.startupChecking && viewModel.startupResult == null -> V4.Warn
+        channelState.connected -> V4.Green
+        viewModel.startupResult is StartupCheckResult.DebugOff -> V4.Error
+        viewModel.startupResult is StartupCheckResult.NeedPairing -> V4.Warn
+        viewModel.startupResult is StartupCheckResult.NotReachable -> V4.Warn
+        else -> V4.Muted
+    }
+
+    // 回到前台时自动重跑检查：App 被切后台再回来时进程往往没被杀，
+    // ViewModel 也不会重建——若不重跑，就会一直显示旧结果（例如"已连接旧端口"），
+    // 而用户刚开完无线调试期望看到端口更新。
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.runStartupCheck("回到前台")
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // 成功类提示展示 4 秒后自动消失，不再常驻
+    LaunchedEffect(viewModel.startupResult) {
+        val r = viewModel.startupResult ?: return@LaunchedEffect
+        if (r.connected) {
+            kotlinx.coroutines.delay(4_000)
+            viewModel.clearStartupResult()
+        }
+    }
+    // 通道激活后（如配对完成、重连成功），清除过期的"未配对/不可达"提示
+    LaunchedEffect(channelState.connected) {
+        if (channelState.connected && viewModel.startupResult?.connected == false) {
+            viewModel.clearStartupResult()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // ---- 顶栏：使用方法 + 筛选 + 导出（复制/清空在主按钮行，⋮ 菜单已删）----
-        TopAppBar(
-            title = { Text(stringResource(R.string.tab_capture)) },
-            actions = {
-                IconButton(onClick = onGoGuide) {
-                    Icon(Icons.Default.HelpOutline, contentDescription = stringResource(R.string.cd_guide))
-                }
-                IconButton(onClick = { filtersOpen = true }) {
-                    Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.cd_filter))
-                }
-                IconButton(onClick = onGoExport) {
-                    Icon(Icons.Default.SaveAlt, contentDescription = stringResource(R.string.cd_export))
-                }
-            }
+        // ── ① 顶栏：只剩标题 + 状态点 ──
+        V4TopBar(
+            title = stringResource(R.string.tab_capture),
+            statusColor = statusColor,
+            onStatusClick = onGoConnect
         )
 
-        // ---- 状态行：检查条 + 通道条合一，整行可点击，点击进连接页 ----
-        val checkPhase by viewModel.checkPhase.collectAsState()
-        HomeStatusBar(
-            result = viewModel.startupResult,
-            checking = viewModel.startupChecking,
-            phase = checkPhase,
-            channelConnected = channelState.connected,
-            channelLabel = channelState.deviceLabel,
-            onGoConnect = onGoConnect,
-            onRetry = { viewModel.runStartupCheck("手动重试") }
-        )
+        // ── ② 高频行：按使用频率从左到右 ──
+        //   ▷ 抓启动 · 选进程胶囊 · ⌕ 搜索 · ☰ 筛选 · spacer · ⋮
+        //   「抓启动」放最左：它是这个页面的第一步动作，比「选哪个进程」还靠前；
+        //   同时主按钮文案是「开始」，不再和它重名。
+        V4QuickActionBar {
+            V4RoundIconButton(
+                icon = "▷",
+                label = stringResource(R.string.v4_switch_startup),
+                expandable = true,
+                active = viewModel.startupMode,
+                onClick = { viewModel.onStartupModeChange(!viewModel.startupMode) }
+            )
+            V4ProcessChip(
+                appName = viewModel.packageName.trim(),
+                onClick = { viewModel.showPicker(true) },
+                placeholder = stringResource(R.string.v4_process_placeholder)
+            )
+            V4RoundIconButton(
+                icon = "⌕",
+                contentDescription = stringResource(R.string.v4_cd_search),
+                onClick = { searchOpen = true },
+                active = search.isNotBlank(),
+                dot = search.isNotBlank()
+            )
+            V4RoundIconButton(
+                icon = "☰",
+                contentDescription = stringResource(R.string.v4_cd_filter),
+                onClick = { filterOpen = true },
+                // 高亮条件：级别高于 DEBUG，或缓冲区不是默认两项——表示筛选确实在起作用
+                active = viewModel.priority > LogPriority.DEBUG ||
+                    viewModel.buffers != DEFAULT_BUFFERS
+            )
+            V4BarSpacer()
+            V4RoundIconButton(
+                icon = "⋮",
+                contentDescription = stringResource(R.string.v4_cd_more),
+                onClick = { menuOpen = true },
+                active = menuOpen
+            )
+        }
 
-        // ---- 更新横幅：启动静默检查发现新版本时出现，点击进设置页自动弹更新框 ----
+        // 更新横幅：启动静默检查发现新版本时出现，点击进设置页自动弹更新框
         viewModel.availableUpdate?.let { update ->
             Surface(
                 onClick = onGoSettings,
@@ -175,192 +241,43 @@ fun CaptureScreen(
             }
         }
 
-        // 回到前台时自动重跑检查：App 被切后台再回来时进程往往没被杀，
-        // ViewModel 也不会重建——若不重跑，就会一直显示旧结果（例如"已连接旧端口"），
-        // 而用户刚开完无线调试期望看到端口更新。
-        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-        androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                    viewModel.runStartupCheck("回到前台")
-                }
-            }
-            lifecycleOwner.lifecycle.addObserver(observer)
-            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-        }
-        // 成功类提示展示 4 秒后自动消失，不再常驻
-        androidx.compose.runtime.LaunchedEffect(viewModel.startupResult) {
-            val r = viewModel.startupResult ?: return@LaunchedEffect
-            if (r.connected) {
-                kotlinx.coroutines.delay(4_000)
-                viewModel.clearStartupResult()
-            }
-        }
-        // 通道激活后（如配对完成、重连成功），清除过期的"未配对/不可达"提示
-        androidx.compose.runtime.LaunchedEffect(channelState.connected) {
-            if (channelState.connected && viewModel.startupResult?.connected == false) {
-                viewModel.clearStartupResult()
-            }
-        }
-
-        // ---- 主按钮 + 配置摘要 + 搜索 + 日志流 ----
+        // ── ③ 统计小字 + 日志区（Box 承载浮层）──
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = 12.dp)
         ) {
-            // ---- 主按钮行：开始抓取（缩短）+ 复制 / 清空小图标 ----
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Button(
-                    onClick = viewModel::capture,
-                    enabled = !viewModel.busy && channelState.connected,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp)
-                ) {
-                    Text(
-                        if (viewModel.busy) stringResource(R.string.capture_running) else stringResource(R.string.capture_start),
-                        fontSize = 14.sp,
-                        maxLines = 1
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(displayed.joinToString("\n") { it.raw }))
-                        Toast.makeText(context, "已复制 ${displayed.size} 行", Toast.LENGTH_SHORT).show()
-                    },
-                    enabled = displayed.isNotEmpty(),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = stringResource(R.string.cd_copy_all),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(
-                    onClick = { viewModel.clearLogs() },
-                    enabled = viewModel.entries.isNotEmpty(),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.cd_clear_logs),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
             if (viewModel.busy) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            viewModel.status?.let {
-                CopyableText(text = it)
-            } ?: viewModel.lastLines?.let { lines ->
-                CopyableText(text = stringResource(R.string.capture_stats_fmt, lines, viewModel.lastDurationMs))
+            // 统计行：抓取中显示状态文案，完成后显示「最近 N 行 · 用时 Xs」
+            val statsText = when {
+                viewModel.busy -> stringResource(R.string.capture_running)
+                viewModel.status != null -> viewModel.status!!
+                viewModel.lastLines != null -> stringResource(
+                    R.string.v4_stats_recent_fmt,
+                    viewModel.lastLines!!,
+                    formatSeconds(viewModel.lastDurationMs)
+                )
+                else -> ""
             }
-
-            // ---- 工具行：搜索 + 进程 + 级别 + 行数，一行放下（缓冲区在「更多筛选」里）----
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                EllipseTextField(
-                    value = search,
-                    onValueChange = { search = it },
-                    placeholder = stringResource(R.string.search_hint),
-                    modifier = Modifier.weight(1f)
-                )
-                // 点「进程」直接弹应用选择器（不再展开输入框；换应用/清除在弹窗里完成）
-                Surface(
-                    onClick = { viewModel.showPicker(true) },
-                    shape = CircleShape,
-                    color = if (viewModel.packageName.isNotBlank()) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    }
-                ) {
-                    Text(
-                        viewModel.packageName.trim().take(10).ifBlank { stringResource(R.string.process) },
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
-                    )
-                }
-                FilterDropdown(
-                    label = "≥${viewModel.priority.letter}",
-                    options = LogPriority.entries.toList(),
-                    optionLabel = { "${it.letter} ${it.label}" },
-                    isSelected = { viewModel.priority == it },
-                    onSelect = viewModel::onPriorityChange
-                )
-                FilterDropdown(
-                    label = "${viewModel.maxLines}",
-                    options = listOf(200, 1000, 5000, 20000, 100000),
-                    optionLabel = { "$it 行" },
-                    isSelected = { viewModel.maxLines == it },
-                    onSelect = { viewModel.onMaxLinesChange(it.toString()) }
-                )
-            }
-
-            // ---- 快捷芯片行（横向滚动）：只看错误 / 启动抓取 / 缓冲区多选 / 匹配模式 ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterChip(
-                    selected = viewModel.errorsOnly,
-                    onClick = viewModel::toggleErrorsOnly,
-                    label = { Text(stringResource(R.string.errors_only), fontSize = 11.sp, maxLines = 1) }
-                )
-                FilterChip(
-                    selected = viewModel.startupMode,
-                    onClick = { viewModel.onStartupModeChange(!viewModel.startupMode) },
-                    label = { Text(stringResource(R.string.startup_capture), fontSize = 11.sp, maxLines = 1) }
-                )
-                LogBuffer.entries.forEach { buffer ->
-                    FilterChip(
-                        selected = buffer in viewModel.buffers,
-                        onClick = { viewModel.toggleBuffer(buffer) },
-                        label = { Text(buffer.value, fontSize = 11.sp, maxLines = 1) }
-                    )
-                }
-                FilterChip(
-                    selected = !filterMode,
-                    onClick = { filterMode = !filterMode },
-                    label = {
-                        Text(
-                            if (filterMode) stringResource(R.string.search_as_filter)
-                            else stringResource(R.string.search_as_highlight),
-                            fontSize = 11.sp,
-                            maxLines = 1
-                        )
-                    }
-                )
+            if (statsText.isNotEmpty()) {
+                V4StatsLine(text = statsText)
             }
 
             // 启动抓取结果条：定位到启动点后，可一键只看启动之后的日志
             if (viewModel.startupIndex >= 0) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(bottom = 4.dp)
                 ) {
                     Text(
                         stringResource(R.string.startup_point_line, viewModel.startupIndex + 1) +
                             (viewModel.startupPid?.let { " · PID $it" } ?: ""),
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = V4.Muted
                     )
                     FilterChip(
                         selected = viewModel.startupOnly,
@@ -370,136 +287,328 @@ fun CaptureScreen(
                 }
             }
 
-            // 日志区占据剩余全部空间；点行弹底部详情面板
-            LogListView(
-                entries = displayed,
-                listState = listState,
-                fontSize = settings.fontSize,
-                monoFont = settings.monoFont,
-                highlight = highlight,
-                modifier = Modifier.weight(1f),
-                emptyHint = stringResource(R.string.empty_capture_hint),
-                onLineClick = { entry -> selectedLine = entry },
-                copyFeedback = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
-            )
-        }
-    }
-
-    // ---- 筛选底部面板（低频高级项）：Tag / 关键词 / 抓取前清空 ----
-    // 行数 / 缓冲区 / 级别已收进开始按钮下的下拉菜单；包名在进程行展开输入
-    if (filtersOpen) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = { filtersOpen = false },
-            sheetState = sheetState
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("更多筛选", style = MaterialTheme.typography.titleMedium)
-
-                // 启动抓取：进程出现后继续抓多久（只有开启启动抓取时才有意义）
-                if (viewModel.startupMode) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("启动后继续抓", style = MaterialTheme.typography.labelMedium)
-                        FilterDropdown(
-                            label = "${viewModel.startupTailSec}s",
-                            options = listOf(3, 5, 10, 20, 30),
-                            optionLabel = { "$it 秒" },
-                            isSelected = { viewModel.startupTailSec == it },
-                            onSelect = viewModel::onStartupTailChange
-                        )
-                    }
-                    Text(
-                        "开启后先点「开始抓取日志」，再启动目标 App；本机会一直等到进程出现。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        EllipseTextField(
-                            value = viewModel.tagInput,
-                            onValueChange = viewModel::onTagInputChange,
-                            placeholder = "Tag 过滤，如 flutter",
-                            leadingLabel = "Tag"
-                        )
-                    }
-                    OutlinedButton(onClick = { viewModel.addTagFilter() }) { Text("添加") }
-                }
-
-                if (viewModel.tagFilters.isNotEmpty()) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        viewModel.tagFilters.forEach { filter ->
-                            InputChip(
-                                selected = true,
-                                onClick = { viewModel.removeTagFilter(filter) },
-                                label = { Text("${filter.tag}:${filter.priority.letter}") },
-                                trailingIcon = {
-                                    Icon(Icons.Default.Clear, contentDescription = "移除", modifier = Modifier.padding(end = 2.dp))
-                                }
-                            )
-                        }
-                    }
-                }
-
-                EllipseTextField(
-                    value = viewModel.keywordInput,
-                    onValueChange = viewModel::onKeywordChange,
-                    placeholder = "关键词，逗号分隔，如 error,timeout",
-                    leadingLabel = "关键词"
+            // 日志区 + 浮层（居中状态卡 / 右下 FAB / ⋮ 菜单）
+            Box(modifier = Modifier.weight(1f)) {
+                LogListView(
+                    entries = displayed,
+                    listState = listState,
+                    fontSize = settings.fontSize,
+                    monoFont = settings.monoFont,
+                    highlight = search,
+                    modifier = Modifier.fillMaxSize(),
+                    emptyHint = stringResource(R.string.empty_capture_hint),
+                    onLineClick = { entry -> selectedLine = entry },
+                    copyFeedback = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = viewModel.clearFirst, onCheckedChange = viewModel::onClearFirstChange)
-                    Text("抓取前清空缓冲区", style = MaterialTheme.typography.bodyMedium)
+                // 居中状态浮层：检测中 / 未连接（日志区作为背景，失败时降到 0.28 透明）
+                //
+                // ★ 失败态必须分三种，引导动作各不相同（以前合并成一条「未开启」是错的）：
+                //   DebugOff    无线调试开关没开 → 去系统开发者选项把开关打开
+                //   NeedPairing 开关开了但没配对 → 去连接页走配对流程
+                //   NotReachable 已配对却连不上 → 去连接页排查/重连
+                if (viewModel.startupChecking && viewModel.startupResult == null) {
+                    V4CenterStatus {
+                        V4StatusCard {
+                            V4Spinner()
+                            V4StatusTitle(stringResource(R.string.v4_status_checking))
+                            val sub = checkPhaseSubtitle(checkPhase)
+                            if (sub != null) V4StatusSubtitle(sub)
+                        }
+                    }
+                } else if (!channelState.connected) {
+                    when (val r = viewModel.startupResult) {
+                        is StartupCheckResult.DebugOff -> V4CenterStatus {
+                            V4StatusCard {
+                                Text("⚠", fontSize = 20.sp, color = V4.Error)
+                                V4StatusTitle(
+                                    stringResource(R.string.v4_status_debug_off),
+                                    color = V4.Error
+                                )
+                                V4StatusSubtitle(
+                                    stringResource(R.string.v4_status_debug_off_sub, MDNS_ROUNDS)
+                                )
+                                V4StatusActions {
+                                    // 直达系统开发者选项开开关，不去连接页
+                                    V4StatusButton(
+                                        text = stringResource(R.string.v4_go_enable),
+                                        onClick = viewModel::openDevSettings
+                                    )
+                                    V4StatusButton(
+                                        text = stringResource(R.string.v4_retry),
+                                        ghost = true,
+                                        onClick = { viewModel.runStartupCheck("手动重试") }
+                                    )
+                                }
+                            }
+                        }
+
+                        is StartupCheckResult.NeedPairing -> V4CenterStatus {
+                            V4StatusCard {
+                                Text("🔑", fontSize = 20.sp)
+                                V4StatusTitle(stringResource(R.string.v4_status_need_pairing))
+                                V4StatusSubtitle(stringResource(R.string.v4_status_need_pairing_sub))
+                                V4StatusActions {
+                                    // 配对流程在连接页，这里才该跳连接页
+                                    V4StatusButton(
+                                        text = stringResource(R.string.v4_go_pair),
+                                        onClick = onGoConnect
+                                    )
+                                    V4StatusButton(
+                                        text = stringResource(R.string.v4_retry),
+                                        ghost = true,
+                                        onClick = { viewModel.runStartupCheck("手动重试") }
+                                    )
+                                }
+                            }
+                        }
+
+                        is StartupCheckResult.NotReachable -> V4CenterStatus {
+                            V4StatusCard {
+                                Text("⚠", fontSize = 20.sp, color = V4.Warn)
+                                V4StatusTitle(
+                                    stringResource(R.string.v4_status_not_reachable),
+                                    color = V4.Warn
+                                )
+                                V4StatusSubtitle(stringResource(R.string.v4_status_not_reachable_sub))
+                                V4StatusActions {
+                                    V4StatusButton(
+                                        text = stringResource(R.string.v4_go_connect),
+                                        onClick = onGoConnect
+                                    )
+                                    V4StatusButton(
+                                        text = stringResource(R.string.v4_retry),
+                                        ghost = true,
+                                        onClick = { viewModel.runStartupCheck("手动重试") }
+                                    )
+                                }
+                            }
+                        }
+
+                        else -> Unit
+                    }
+                }
+
+                // 右下角：主 FAB「开始」+ 上方 ⧉ / 🗑 次级按钮（有日志才出现）
+                //
+                // ★ 主按钮只在「通道已连接」或「正在抓取」时出现。
+                //   未连接时它既点不动（enabled=false 走灰底灰字），又会正好压在日志区
+                //   那行居中的空态提示上——白底浅灰按钮叠浅灰文字，看着就像凭空消失了。
+                //   干脆不摆：未连接要看的是中间那张「去开启无线调试」的状态卡，
+                //   连上之后按钮出现，就是正常的主色「开始」。
+                if (channelState.connected || viewModel.busy) {
+                    V4FabColumn(
+                        showActions = displayed.isNotEmpty(),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(14.dp)
+                    ) {
+                        if (displayed.isNotEmpty()) {
+                            V4FabAction(
+                                icon = "⧉",
+                                contentDescription = stringResource(R.string.v4_cd_copy),
+                                onClick = {
+                                    clipboard.setText(AnnotatedString(displayed.joinToString("\n") { it.raw }))
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.v4_toast_copied_lines_fmt, displayed.size),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                            V4FabAction(
+                                icon = "🗑",
+                                contentDescription = stringResource(R.string.v4_cd_clear),
+                                danger = true,
+                                onClick = { viewModel.clearLogs() }
+                            )
+                        }
+                        // 主按钮：永远绘制
+                        V4CaptureFab(
+                            text = if (viewModel.busy) {
+                                stringResource(R.string.capture_running)
+                            } else {
+                                stringResource(R.string.v4_fab_capture)
+                            },
+                            running = viewModel.busy,
+                            enabled = !viewModel.busy,
+                            onClick = viewModel::capture
+                        )
+                    }
+                }
+
+                // ⋮ 低频菜单：导出到文件 / 缓冲区 / 使用方法
+                if (menuOpen) {
+                    // 点空白处收起菜单（先铺一层透明遮罩，再放菜单，保证菜单在上层可点）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tapToDismiss { menuOpen = false }
+                    )
+                    V4OverflowMenu(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 8.dp, end = 12.dp)
+                    ) {
+                        V4MenuItem(
+                            text = stringResource(R.string.v4_menu_export),
+                            icon = "⤓",
+                            onClick = {
+                                menuOpen = false
+                                onGoExport()
+                            }
+                        )
+                        V4MenuSeparator()
+                        V4MenuItem(
+                            text = stringResource(R.string.v4_menu_buffers),
+                            icon = "⊞",
+                            mark = viewModel.buffers.joinToString("·") { it.value },
+                            onClick = { filterOpen = true; menuOpen = false }
+                        )
+                        V4MenuSeparator()
+                        V4MenuItem(
+                            text = stringResource(R.string.v4_menu_guide),
+                            icon = "?",
+                            onClick = {
+                                menuOpen = false
+                                onGoGuide()
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
-    // ---- 行详情底部面板 ----
+    // ── 搜索底部层 ──
+    if (searchOpen) {
+        SearchSheet(
+            initialQuery = search,
+            initialFilterMode = filterMode,
+            recentQueries = recentSearches,
+            onDismiss = { searchOpen = false },
+            onApply = { q, mode ->
+                search = q
+                filterMode = mode
+                if (q.isNotBlank()) {
+                    recentSearches = (listOf(q) + recentSearches.filter { it != q }).take(3)
+                }
+                searchOpen = false
+            }
+        )
+    }
+
+    // ── 筛选底部层 ──
+    if (filterOpen) {
+        FilterSheet(
+            priority = viewModel.priority,
+            maxLines = viewModel.maxLines,
+            buffers = viewModel.buffers,
+            packageName = viewModel.packageName.trim(),
+            startupMode = viewModel.startupMode,
+            startupTailSec = viewModel.startupTailSec,
+            onDismiss = { filterOpen = false },
+            onOpenProcessPicker = {
+                filterOpen = false
+                viewModel.showPicker(true)
+            },
+            onApply = { p, lines, bufs, tailSec ->
+                viewModel.onPriorityChange(p)
+                viewModel.onMaxLinesChange(lines.toString())
+                // 缓冲区：把差异补上/去掉
+                LogBuffer.entries.filter { it in BUFFER_CHOICES }.forEach { b ->
+                    val want = b in bufs
+                    val have = b in viewModel.buffers
+                    if (want != have) viewModel.toggleBuffer(b)
+                }
+                viewModel.onStartupTailChange(tailSec)
+                filterOpen = false
+            }
+        )
+    }
+
+    // ── 进程选择底部层（点行首胶囊 / 筛选层「应用」打开）──
+    if (viewModel.pickerVisible) {
+        AppPickerSheet(
+            apps = viewModel.apps,
+            loading = viewModel.appsLoading,
+            selectedPackage = viewModel.packageName.trim(),
+            onDismiss = { viewModel.showPicker(false) },
+            onPick = { pkg ->
+                viewModel.pickPackage(pkg)
+                viewModel.showPicker(false)
+            },
+            onClear = {
+                viewModel.onPackageChange("")
+                viewModel.showPicker(false)
+            },
+            iconFor = { pkg -> viewModel.iconFor(pkg) }
+        )
+    }
+
+    // ── 行详情底部面板 ──
     selectedLine?.let { entry ->
         LogLineSheet(
             entry = entry,
             onDismiss = { selectedLine = null },
             onCopy = { text ->
                 clipboard.setText(AnnotatedString(text))
-                Toast.makeText(context, "已复制该行日志", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, R.string.v4_toast_copied_line, Toast.LENGTH_SHORT).show()
             },
-            // "仅看此 Tag"：直接把 Tag 填入结果搜索框（前端过滤，点 × 即可取消）
+            // "仅看此 Tag"：直接把 Tag 填入搜索层（前端过滤，清空关键字即可取消）
             onTagFilter = { tag ->
                 search = tag
+                filterMode = true
                 selectedLine = null
-                Toast.makeText(context, "已在结果中过滤：$tag", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.v4_toast_copied_line), Toast.LENGTH_SHORT).show()
             }
-        )
-    }
-
-    if (viewModel.pickerVisible) {
-        AppPickerDialog(
-            apps = viewModel.apps,
-            loading = viewModel.appsLoading,
-            provider = viewModel.appInfoProvider,
-            onDismiss = { viewModel.showPicker(false) },
-            onPick = viewModel::pickPackage,
-            onRefresh = viewModel::refreshApps
         )
     }
 }
 
+/** MDNS 扫描轮数（与 StartupCheck.MDNS_RESCAN_WINDOW_MS 的两轮扫描对应） */
+private const val MDNS_ROUNDS = 3
+
+/** 默认缓冲区（main + crash），用于判断筛选图标是否需要高亮 */
+private val DEFAULT_BUFFERS = setOf(LogBuffer.MAIN, LogBuffer.CRASH)
+
+/** 筛选层暴露给「应用」按钮的缓冲区选项 */
+private val BUFFER_CHOICES = setOf(
+    LogBuffer.MAIN,
+    LogBuffer.SYSTEM,
+    LogBuffer.EVENTS,
+    LogBuffer.CRASH
+)
+
+/** 把耗时毫秒格式化成设计稿里的「1.2s」写法 */
+private fun formatSeconds(ms: Long): String {
+    if (ms <= 0) return "0s"
+    val s = ms / 1000.0
+    return if (s < 10) String.format(java.util.Locale.US, "%.1fs", s) else "${ms / 1000}s"
+}
+
 /**
- * 胶囊下拉筛选已提取为公共组件：见 ui/components/FilterDropdown.kt
+ * 把启动检查的实时阶段映射成设计稿里的副标题。
+ *
+ * CheckPhase 只带一个字符串资源 ID + 参数（core 层不做本地化），所以这里直接
+ * 用 stringResource 解析即可——设计稿里「正在等待无线调试服务通告（第 1/3 轮）」
+ * 的括号内容本身就是现有 check_phase_waiting 文案，不需要另造轮次计数。
  */
+@Composable
+private fun checkPhaseSubtitle(
+    phase: com.loglab.app.core.connect.CheckPhase
+): String? {
+    val res = phase.res ?: return null
+    return runCatching {
+        if (phase.args.isEmpty()) stringResource(res) else stringResource(res, *phase.args.toTypedArray())
+    }.getOrNull()
+}
+
+/** 点空白处收起浮层的点击修饰符（无涟漪，避免整屏闪一下） */
+private fun Modifier.tapToDismiss(onClick: () -> Unit): Modifier = composed {
+    clickable(
+        onClick = onClick,
+        indication = null,
+        interactionSource = remember { MutableInteractionSource() }
+    )
+}

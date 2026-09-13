@@ -155,14 +155,12 @@ class StartupCheck @Inject constructor(
         }.getOrNull()?.trim() == "probe-ok"
 
     /**
-     * 对一个候选端口生成地址尝试序列：loopback 恒为第一顺位，
-     * mDNS 解析出的 IP 作为回退（防极端 ROM 不监听回环）。
+     * 候选端口 → 地址序列。v1.8.4 起**只用 127.0.0.1**：App 与 adbd 同机，
+     * 回环地址与网段无关、毫秒级出结论；多版本实测局域网 IP 候补没有命中过，
+     * 纯属浪费时间（还多一条误导路径）。mDNS 只用来**发现端口**，解析出的 host 弃用。
      */
-    private fun addrCandidates(port: Int, mdnsHost: String?): List<Pair<String, Int>> =
-        buildList {
-            add(LOOPBACK to port)
-            if (!mdnsHost.isNullOrBlank() && mdnsHost != LOOPBACK) add(mdnsHost to port)
-        }
+    private fun addrCandidates(port: Int): List<Pair<String, Int>> =
+        listOf(LOOPBACK to port)
 
     /**
      * 采用一个候选地址：写入配置 → 连接 + echo 复验。
@@ -244,7 +242,7 @@ class StartupCheck @Inject constructor(
                     "mDNS 发现端口与存档不同：${newer.joinToString { "${it.host}:${it.port}" }}，逐一尝试验证"
                 )
                 for (dev in newer) {
-                    for ((host, port) in addrCandidates(dev.port, dev.host)) {
+                    for ((host, port) in addrCandidates(dev.port)) {
                         setPhase(R.string.check_phase_verifying, host, port)
                         when (tryAdopt(host, port)) {
                             Verify.OK -> {
@@ -329,7 +327,7 @@ class StartupCheck @Inject constructor(
                 )
             )
         for (dev in candidates) {
-            for ((host, port) in addrCandidates(dev.port, dev.host)) {
+            for ((host, port) in addrCandidates(dev.port)) {
                 setPhase(R.string.check_phase_trying, host, port)
                 when (tryAdopt(host, port)) {
                     Verify.OK -> {
@@ -346,53 +344,49 @@ class StartupCheck @Inject constructor(
                 }
             }
         }
+        // ⑤ 复核轮：第 1 轮 mDNS 候选全部验证失败 → **统一**再扫一轮等新通告。
+        //    两个场景在此不可区分、处理方式一致：
+        //    a) 无线调试刚重开：真实新端口的通告常延迟数秒（实测 11 秒+）才被系统发现；
+        //    b) 无线调试已关闭：mDNS 残留幽灵通告（端口数小时不变），真实端口不会再出现。
+        //    第 2 轮只尝试「第 1 轮没试过的端口」；仍无新端口则维持失败结论
+        //    （若此前出现过 adbd 半死信号，由下方 sawDeadAdbd 统一判 DebugOff）。
         if (candidates.isNotEmpty()) {
             logger.log("CHECK", "全部 ${candidates.size} 个候选地址均验证失败，回滚原配置")
             rollbackTo(cur.adbHost, cur.adbPort)
-        }
-
-        // ⑤ 幽灵缓存防御：mDNS 只报出与存档**同端口**的服务 = 系统缓存的"幽灵"通告
-        //    （无线调试重开端口必变；关闭后通告也该消失）。
-        //    ★ 此时不能立即断定未开启：无线调试**刚重开**时，新端口的 mDNS 通告
-        //    常常要数秒才会被系统发现（实测可晚 11 秒+），自动再扫一轮，
-        //    扫到新端口就直接尝试并复验，把"手动重试"变成"自动等待"。
-        //    （loopback 方案下只比较端口；存档若是局域网 IP，上一步迁移失败后
-        //    host 也视为"与幽灵一致"。）
-        val staleCacheOnly = candidates.isNotEmpty() && candidates.all { it.port == cur.adbPort }
-        if (staleCacheOnly) {
+            val triedPorts = buildSet {
+                add(cur.adbPort)
+                candidates.forEach { add(it.port) }
+            }
             setPhase(R.string.check_phase_waiting)
-            logger.log("CHECK", "mDNS 仅报出存档端口（疑为幽灵缓存），自动再扫一轮等待新服务通告")
+            logger.log("CHECK", "自动再扫一轮，等待新端口通告（已试端口：${triedPorts.sorted()}）")
             val freshList = runCatching {
                 nsd.discover(MDNS_RESCAN_WINDOW_MS)
-                    .firstOrNull { snap -> snap.any { d -> d.kind != NsdDiscovery.Kind.PAIRING && d.port != cur.adbPort } }
-                    ?.filter { it.kind != NsdDiscovery.Kind.PAIRING && it.port != cur.adbPort }
+                    .firstOrNull { snap ->
+                        snap.any { d -> d.kind != NsdDiscovery.Kind.PAIRING && d.port !in triedPorts }
+                    }?.filter { it.kind != NsdDiscovery.Kind.PAIRING && it.port !in triedPorts }
                     .orEmpty()
             }.getOrNull().orEmpty()
             if (freshList.isNotEmpty()) {
-                logger.log("CHECK", "mDNS 第 2 轮发现 ${freshList.size} 个新候选：${freshList.format()}")
+                logger.log("CHECK", "mDNS 第 2 轮发现 ${freshList.size} 个新端口：${freshList.format()}")
             }
             for (dev in freshList.sortedBy { it.kind != NsdDiscovery.Kind.TLS_CONNECT }) {
-                for ((host, port) in addrCandidates(dev.port, dev.host)) {
-                    setPhase(R.string.check_phase_trying, host, port)
-                    when (tryAdopt(host, port)) {
-                        Verify.OK -> {
-                            logger.log("CHECK", "第 2 轮新地址验证通过（echo 复验 OK），连接成功")
-                            setPhase()
-                            return@withContext StartupCheckResult.PortUpdated(host, cur.adbPort, port)
-                        }
-                        Verify.DEAD -> {
-                            sawDeadAdbd = true
-                            logger.log("CHECK", "候选 $host:$port 握手成功但命令执行失败（adbd 半死）")
-                        }
-                        Verify.UNREACHABLE ->
-                            logger.log("CHECK", "候选 $host:$port 连接/握手失败")
+                setPhase(R.string.check_phase_trying, LOOPBACK, dev.port)
+                when (tryAdopt(LOOPBACK, dev.port)) {
+                    Verify.OK -> {
+                        logger.log("CHECK", "第 2 轮新端口 ${dev.port} 验证通过（echo 复验 OK），已自动切换")
+                        setPhase()
+                        return@withContext StartupCheckResult.PortUpdated(LOOPBACK, cur.adbPort, dev.port)
                     }
+                    Verify.DEAD -> {
+                        sawDeadAdbd = true
+                        logger.log("CHECK", "第 2 轮候选 127.0.0.1:${dev.port} 握手成功但命令执行失败（adbd 半死）")
+                    }
+                    Verify.UNREACHABLE ->
+                        logger.log("CHECK", "第 2 轮候选 127.0.0.1:${dev.port} 连接/握手失败")
                 }
             }
             rollbackTo(cur.adbHost, cur.adbPort)
-            logger.log("CHECK", "第 2 轮无可用新候选，确认无线调试未开启")
-            setPhase()
-            return@withContext StartupCheckResult.DebugOff
+            logger.log("CHECK", "第 2 轮无可用新端口，维持失败结论")
         }
 
         // ⑥ 下结论：mDNS 完全无发现且扫描器没有报"发现但解析失败/启动失败" →
@@ -404,6 +398,9 @@ class StartupCheck @Inject constructor(
         if (sawDeadAdbd) {
             logger.log("CHECK", "结论：无线调试未开启（存在 adbd 半死信号：握手成功但命令执行失败；mDNS 通告为幽灵缓存，不作数）")
             setPhase()
+            // 失败结论下通道必须保持断开：半死 adbd 仍接受 TLS 握手，上面 rollback 的重连
+            // 会把通道置回"已连接"，UI 顶着死端口显示绿点，压过"无线调试未开启"红字（v1.8.4 修复）
+            runCatching { channelManager.disconnect() }
             return@withContext StartupCheckResult.DebugOff
         }
         val result = when {
@@ -416,6 +413,10 @@ class StartupCheck @Inject constructor(
             } ?: StartupCheckResult.NotReachable(
                 R.string.status_found_cant_connect_plain, listOf<Any>(devices.size)
             )
+        }
+        if (!result.connected) {
+            // 同上：任何失败结论都不允许通道停留在"已连接"状态（adbd 半死时 rollback 重连必然假成功）
+            runCatching { channelManager.disconnect() }
         }
         logger.log("CHECK", "结论：${result.message}")
         setPhase()

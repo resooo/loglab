@@ -75,9 +75,25 @@ class AppInfoProvider @Inject constructor(
         )
     }
 
-    /** 图标按需加载（LazyColumn 只会对可见项调用，不会一次拉几百个） */
-    fun icon(packageName: String): Drawable? = runCatching {
-        pm.getApplicationIcon(packageName)
+    /**
+     * 图标按需加载（LazyColumn 只会对可见项调用，不会一次拉几百个）。
+     *
+     * ★ 用 getApplicationInfo + loadIcon 而不是 getApplicationIcon：
+     *   getApplicationIcon 在部分应用上会直接返回框架内置的默认图标
+     *   （一个通用小方块），调用不报错但拿到的不是真实图标——崩溃页原来就是
+     *   这么写的，表现为「图标位一直是灰方块 / 显示不出来」。
+     *   改成显式 loadIcon 后：真实图标能拿到，且拿不到时我们明确返回 null，
+     *   由调用方渲染「首字母占位块」，比默默画一个假图标更好辨认。
+     *
+     * @param sizePx 期望图标边长（px）。0 表示用系统默认密度。
+     */
+    fun icon(packageName: String, sizePx: Int = 0): Drawable? = runCatching {
+        val info = pm.getApplicationInfo(packageName, 0)
+        val drawable = info.loadIcon(pm)
+        // 自适应图标按目标尺寸设置 bounds，避免小尺寸位图放大后发虚
+        if (sizePx > 0) drawable.setBounds(0, 0, sizePx, sizePx)
+        // 系统找不到专属图标时会返回 ICON_UNDEFINED 对应的默认图标，视为「没有图标」
+        if (info.icon == 0 && drawable === pm.defaultActivityIcon) null else drawable
     }.onFailure {
         logger.log("APPS", "加载图标失败 $packageName：${it.message}")
     }.getOrNull()

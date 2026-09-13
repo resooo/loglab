@@ -3,6 +3,93 @@
 All notable changes to LogLab are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versioning follows [SemVer](https://semver.org/).
 
+## [Unreleased] — 2026-09-13
+
+Working tree state after the 1.9.3 build. **versionCode / versionName were intentionally left at 27 / 1.9.3** at the requester's instruction ("keep 1.9.3, do not bump yet"), so this section is not yet a released version. Bump before the next release.
+
+### Fixed
+- **Crash records were captured but never appeared in the list** (two independent causes):
+  1. *The parser held the event back.* `logcat -b crash` has a **trailing silence** problem — after a crash is written, the stream may stay quiet for a long time (possibly forever). `CrashParser` only emits a block when the *next line* arrives or the stream ends, so a crash reproduced while the user was in another app stayed inside the parser's `current` block. The "Read history" action worked because `logcat -b crash -d` terminates and flushes — which is exactly why the record was visible there but not in the list. `CrashParser.isSegmentBoundary()` now detects the end of a block and publishes it immediately; continuation lines (bare stack frames, same-tag follow-ups) are never mistaken for a boundary.
+  2. *The UI never recomposed.* Crash monitoring runs in a foreground service, so data written while the app is backgrounded had no recomposition trigger on return. Added `RefreshOnResume` (fires on `ON_RESUME` only — no polling) plus a list anchor that invalidates the `LazyColumn` keys, covering the "Last 7 days" tab where new records are inserted mid-list rather than appended.
+- **Crash page app icons never rendered.** `PackageManager.getApplicationIcon()` returns the framework default icon for some packages — no exception, just the wrong drawable. Switched to `getApplicationInfo(...).loadIcon(pm)` and made "no real icon" an explicit `null` so the UI draws a placeholder instead of a fake icon. Also fixed the bitmap cache key (was the `Drawable` *instance*, which is a new object on every recomposition → bitmap rebuilt every frame).
+- **Clear made no visible change on the crash page.** Regression from the list-anchor change above: item keys were built from a refresh anchor that `clear()` did not advance, so `LazyColumn` reused the stale items. `CrashViewModel.clear()` now advances the anchor and resyncs its snapshot.
+- **Dark mode was unusable: the top-bar title and group headings were invisible.** The `V4` design tokens read `isSystemInDarkTheme()` (the *system* switch) while `MaterialTheme` was driven by the *app's* own dark setting. With system light + app dark, the palette returned a dark-on-dark foreground over a dark background. Tokens now read a `LocalV4Dark` CompositionLocal published by `LogLabTheme`, so the palette and the color scheme can never disagree. Four further tokens (`IconIdleResolved`, `DisabledResolved`, `DisabledTextResolved`, `SubtleResolved`) got dark variants, since their light values washed out on a dark background.
+- **"Enable wireless debugging" opened the pairing page instead of the developer options.** `StartupCheck` already distinguished `DebugOff` / `NeedPairing` / `NotReachable` in the core layer, but the UI collapsed all three into a single "wireless debugging is off" card wired to the pairing screen. Added `DevSettingsLauncher` (three-step intent fallback to the developer options) and split the status card and status-dot colour per case.
+
+### Added
+- **Share diagnostics** on the crash page (⋮ menu): crash records + runtime log + device/version info in one shareable text, so "it captured but did not show" can be diagnosed without guesswork. `CrashMonitorService` also logs each parsed record with package / type / timestamp / whether it was actually stored, making de-duplication and retention-window rejections visible.
+
+### Changed
+- Crash page: the "Start/Stop monitoring" pill left the quick-action row (the bottom-right FAB owns capture start/stop; having both was redundant). The FAB reads **"开始" / "Start"**. Quick-action row is now *read history · menu · ⋮*.
+- Crash page: added the app-icon placeholder (app-name initial on a primary-tinted tile) matching the process picker, and made row icons decode at 96px with the package name as cache key.
+- Capture page labels: **「抓启动」**, **「选进程」** (English `Auto`, `Select app`).
+
+## [1.9.3] - 2026-09-11
+
+### Fixed
+- **The capture-on-start toggle disappeared from the capture page**: in 1.9.2 it was rendered as a pill whose label is only drawn in the `expandable` branch of `V4RoundIconButton`. It also collided visually with the primary FAB, which was labelled "Capture" — two different buttons that looked like the same action. The toggle now shows an explicit **"Start" / "启动"** label again, and the primary FAB was renamed to **"开始" / "Start"** so the two are unambiguous.
+
+### Changed
+- **Quick-action rows reordered by usage frequency**: the most-used action now sits leftmost on each page. Capture: *start-on-launch toggle · process chip · search · filter*. Live: *pause · stop · process chip · search · keywords*. Crash: *monitor toggle · read history · menu* (read-history was promoted out of the ⋮ menu, and still remains there).
+- **Crash page FAB label**: "Monitor" → **"Listen" / 「监听」**.
+- **Log list no longer prints the leading timestamp**: `MM-DD HH:mm:ss.SSS` repeated on every row ate roughly half the screen width on a phone and pushed the actual message off to the right. Rows now render only `[level] Tag: message` (unparsed continuation lines — stack traces — are still shown verbatim). Nothing is lost: the detail sheet now shows the timestamp in its header, and both the copy button and the exported file still use the full original line including the timestamp.
+
+## [1.9.2] - 2026-09-11
+
+### Fixed
+- **Crash page did not refresh after clearing**: `CrashViewModel.filteredEvents` was a plain getter (`get() = events.value.filter { ... }`), which Compose cannot register as a snapshot dependency — clearing or adding records left the stale list on screen. It is now a `derivedStateOf` over `events` / `range`, so the list recomputes and the UI repaints the moment the store changes.
+
+### Changed
+- **Live page FAB label**: the bottom-right monitor button now reads just **"Monitor"** instead of "Start monitoring".
+- **Copy / clear moved next to the capture button (all three pages)**: ⧉ copy and 🗑 clear left the quick-action row and now sit as smaller 40dp circles stacked **above** the main 56dp FAB, bottom-right. They only appear once there is content to act on (log lines / crash records), so empty pages no longer show buttons that do nothing.
+- **Capture page: "Capture on app start" moved out of the ⋮ menu** to the quick-action row, directly to the right of the process chip, as a toggleable pill (primary-tinted while on — matching the crash page's monitor pill).
+
+## [1.9.1] - 2026-09-11
+
+### Fixed
+- **Live page crashed on open** (`IllegalFormatConversionException: d != java.lang.Float`): the v4 stats line for the live page used `%2$d 行/秒`, but `ratePerSecond` is a `Float` — the previous wording used `%2$.1f`. Corrected to `%2$.1f` in both locales. Every other formatter added in 1.9.0 was re-audited against its call sites and is type-correct.
+- **v4 top bar overlapped the system status bar**: the host `Scaffold` runs with `contentWindowInsets = WindowInsets(0,0,0,0)` (edge-to-edge), and the old layout relied on Material3 `TopAppBar` to absorb the status-bar inset. The custom `V4TopBar` did not, so the title sat underneath the status icons. `V4TopBar` now applies `windowInsetsPadding(WindowInsets.statusBars)` itself (with an `applyStatusBarInset` escape hatch for pages that already handle it).
+
+## [1.9.0] - 2026-09-11
+
+### Changed — UI rebuilt to the v4 layout spec
+
+A full layout pass across the capture, live and crash pages, following the v4 design sheet.
+
+- **Minimal top bar**: it now carries only the title plus a **7dp status dot** (green = connected, amber = checking, red = error/off) — the dot is tappable and opens the connect page. The `?` / filter / export icon buttons that used to sit in the top bar are gone.
+- **New dedicated quick-action row**: leading **process chip** (34dp pill, primary when an app is chosen, grey "Process" placeholder otherwise), then 34dp round buttons for **search ⌕ · filter ☰ · copy ⧉ · clear 🗑**, followed by a spacer that pushes **⋮ (more)** to the far right. The process chip leads because picking the process is always step one of a log session; the spacer keeps "more" away from the frequent actions to avoid mis-taps.
+- **Status moved into a centered card overlay**: "Checking connection…" shows a spinner plus the live phase line; a failure shows ⚠ + "Wireless debugging is off" with [Enable] / [Retry]. The log list stays visible behind it (dimmed to 28% on failure) instead of the old always-reserved status row.
+- **Floating capture FAB** (56dp, bottom-right, 14dp inset): "Capture" in primary blue, "Stop" in red while running, grey when disabled. The log area now takes nearly the full remaining height.
+- **Search and filter became bottom sheets** — the page no longer keeps a permanent search field or chip row:
+  - *Search sheet*: input with live filtering, match mode (**Filter (matches only)** / **Highlight (keep all, mark yellow)**), recent searches, [Cancel] [Apply].
+  - *Filter sheet*: log level (V all / D / I / W and above / E), max lines kept (200 / 1000 / 5000 / 20000 / 100000), buffers (main / system / events / crash, multi-select), process & misc (app, keep capturing after start), [Reset] [Done]. All edits are staged locally and only applied on "Done".
+  - *Process picker sheet*: search box plus flat rows (app name + package + ✓), [Clear selection] [Done] — replaces the old icon-list dialog.
+- **⋮ overflow menu for the low-frequency items**: Export to file / Capture on app start (with On/Off state) / Buffers (with current value) / How to use.
+- **Crash page**: quick-action row is now a wide "Start monitoring" pill (becomes "Stop monitoring") plus ☰ ⧉ 🗑 ⋮; records render as compact flat rows (app name + red timestamp / red "type · summary" / grey package) separated by 1dp lines; the stats line reads "Today · N records"; the FAB turns red "Stop" while monitoring. The time-range switch (Today / Last 7 days) moved into the ⋮ menu.
+- **Live page**: quick-action row is process · ⌕ · ☰ · ⏸/▶ · ⏹ · ⋮; the rate moved into the stats line ("Showing 1000 lines · 12 lines/s"); the FAB reads "Stop" while running.
+- **Log line colours aligned with the design sheet**: info `#1FA95E`, warn `#D98A16`, error `#E5484D` (verbose/debug unchanged), so the terminal palette matches the spec exactly.
+
+### Fixed
+- **Localization gaps closed for runtime status text**: capture/live/crash statuses (`Probing channel…`, start-up capture progress, history-read results, share/start failures) and every copy Toast are now resource-backed instead of hardcoded Chinese, so switching to English no longer leaves half the messages in Chinese.
+- **Crash message colour no longer depends on Chinese keywords**: the UI used to decide red-vs-blue by `contains("失败")`, which broke in English. `CrashStore` now carries an explicit `messageIsError` flag.
+
+### Added
+- Shared v4 component set under `ui/components/`: `V4TopBar`, `V4StatusDot`, `V4QuickActionBar`, `V4ProcessChip`, `V4RoundIconButton`, `V4CaptureFab`, `V4CenterStatus` / `V4StatusCard`, `V4OverflowMenu`, `V4StatsLine`, `SearchSheet`, `FilterSheet`, `AppPickerSheet`, plus the `V4` design-token object (light/dark values for bg / surface / surface-2 / primary / line / muted).
+
+### Removed
+- Dead components after the rewrite: `HomeStatusBar` (superseded by the top-bar status dot plus the centered status card), `CfgChip` and `PackagePickerDialog` (both unreferenced). `EllipseTextField`, which used to live inside `HomeStatusBar.kt`, moved to its own file — it is still used by the connect / export / live-keyword screens.
+- Version 1.9.0 (24)
+
+## [1.8.4] - 2026-09-08
+
+### Fixed
+- **Port change after re-enabling wireless debugging is now picked up reliably**: previously the rescan-once safety net only ran when every mDNS candidate matched the archived port; a **stale cached advertisement on a different port** (ghost ads survive for hours and ports stay identical across sessions) bypassed it, so the check gave up before the real new port appeared (advertisements can lag 11s+ after re-enabling). The rescan round now runs **whenever all first-round candidates fail**, only trying ports that were not tried before — a genuine new port gets adopted automatically, a ghost ad still ends in the correct "wireless debugging is off" verdict.
+- **"Wireless debugging is off — enable" prompt now actually shows on the home screen**: when a check concluded *off*, the rollback reconnect could still pass the TLS handshake (half-dead adbd), flipping the channel state back to "connected" — and the home status bar rendered the green "connected" row **before** the red failure row, hiding the prompt entirely. Failed verdicts now always disconnect the channel, and the red failure row takes priority over a (possibly stale) "connected" state.
+
+### Changed
+- **All connection addresses are now strictly `127.0.0.1`**: after several releases in production the LAN-IP fallback never fired once — every candidate, pairing, and reconnect uses the loopback address only (mDNS is used solely to discover the port; its resolved host is discarded). Failure verdicts also come faster (loopback refuses in milliseconds).
+- Version 1.8.4 (23)
+
 ## [1.8.3] - 2026-09-08
 
 ### Fixed

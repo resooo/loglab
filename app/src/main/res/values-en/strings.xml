@@ -34,7 +34,7 @@
     <string name="startup_point_line">Startup point: line %1$d</string>
     <string name="startup_only_after">After startup</string>
     <string name="update_banner">New version v%1$s available — tap to view</string>
-    <string name="empty_capture_hint">Once connected, tap the button above to capture logs.\nFirst time? Tap ? in the top bar for the guide</string>
+    <string name="empty_capture_hint">Once connected, tap the Capture button at the bottom right.\nFirst time? Tap &#8942; (more) and choose How to use</string>
 
     <!-- ============ Live tail ============ -->
     <string name="tail_rate_fmt">%1$d lines · %2$.1f lines/s</string>
@@ -84,6 +84,7 @@
     <string name="crash_copied">Stack copied</string>
     <string name="crash_cleared">Cleared</string>
     <string name="crash_menu_clear">Clear records</string>
+    <string name="crash_menu_diagnostics">Share diagnostics</string>
     <string name="cd_app_icon">App icon</string>
 
     <!-- ============ Settings ============ -->
@@ -98,16 +99,42 @@
     <string name="toast_clear_address">Address cleared; the next connection will re-scan</string>
     <string name="section_appearance">Appearance</string>
     <string name="dark_theme">Dark theme</string>
+    <string name="dark_theme_sub">Easier on the eyes when reading logs at night</string>
+    <string name="dynamic_color">Dynamic colour</string>
+    <string name="dynamic_color_sub">Match the accent colour to your wallpaper (Android 12+)</string>
     <string name="language">Language / 语言</string>
     <string name="lang_follow_system">System</string>
     <string name="lang_zh">中文</string>
     <string name="lang_en">English</string>
     <string name="section_diagnostics">Diagnostics</string>
     <string name="last_crash_report">Last crash report</string>
+    <string name="last_crash_report_sub">Kept automatically when the app crashes</string>
+    <string name="no_crash_report">No crash report</string>
     <string name="toast_copied_crash_report">Crash report copied</string>
     <string name="run_log">Runtime log</string>
+    <string name="run_log_sub">Connection, capture and pairing events</string>
     <string name="no_log_yet">(no logs yet)</string>
     <string name="cd_view_log">View runtime log</string>
+
+    <!-- ============ Settings: status card extras ============ -->
+    <string name="settings_status_sub_connected">Wireless debugging is ready — you can capture logs</string>
+    <string name="settings_status_sub_disconnected">Tap to open the connect page and enable wireless debugging</string>
+    <string name="settings_pairing">Pairing</string>
+    <string name="settings_pairing_sub_paired">The pairing key is stored on this device</string>
+    <string name="settings_pairing_sub_unpaired">Not paired yet — pair on the connect page first</string>
+    <string name="settings_fallback">Connection fallback</string>
+    <string name="settings_fallback_sub">For when things go wrong: reset pairing or forget the address</string>
+
+    <!-- ============ Settings: card extras ============ -->
+    <string name="language_sub">Switch the UI language; applied immediately</string>
+    <string name="clear_address_short">Clear</string>
+    <string name="paired_short">Paired</string>
+    <string name="about_desc_short">A log capture tool with embedded ADB wireless debugging</string>
+    <string name="check_update_hint">Tap the button to check for a new version</string>
+    <string name="update_found_fmt">New version %1$s found</string>
+    <string name="v4_status_connected_short">Connected</string>
+    <string name="v4_status_off_short">Offline</string>
+    <string name="v4_status_none_short">None</string>
 
     <!-- ============ About ============ -->
     <string name="section_about">About</string>
@@ -198,7 +225,6 @@
     <string name="scan_found_fmt">Found %1$d services — tap the "Wireless debugging" one to connect; pairing port auto-filled</string>
     <string name="pairing_port_only_fmt">%1$s:%2$d is a pairing port, for one-time pairing only and cannot capture logs; pick the "Wireless debugging" one instead</string>
     <string name="scan_connected_fmt">Connected to 127.0.0.1:%1$d</string>
-    <string name="scan_connected_fallback_fmt">Connected to %1$s:%2$d (loopback failed; fell back to the LAN address)</string>
     <string name="connect_failed_fmt">Entered 127.0.0.1:%1$d but connection failed: %2$s</string>
     <string name="confirm_adb_on">make sure wireless debugging is on</string>
     <string name="probe_ok">ADB: available</string>
@@ -257,4 +283,114 @@
     <string name="picker_system_suffix">" · system"</string>
     <string name="capture_stats_fmt">%1$d lines · %2$d ms</string>
     <string name="capture_fail_adb_off">Capture failed: connection refused — wireless debugging may be off; enable it and retry</string>
+
+    <!-- ══════════ v4 layout: common actions ══════════ -->
+    <string name="v4_cancel">Cancel</string>
+    <string name="v4_apply">Apply</string>
+    <string name="v4_done">Done</string>
+    <string name="v4_reset">Reset</string>
+    <string name="v4_seconds">s</string>
+    <string name="v4_on">On</string>
+    <string name="v4_off">Off</string>
+
+    <!-- ══════════ v4 layout: top bar status dot ══════════ -->
+    <string name="v4_cd_status_dot">Connection status, tap to open connect page</string>
+    <string name="v4_cd_search">Search logs</string>
+    <string name="v4_cd_filter">Filter and capture settings</string>
+    <string name="v4_cd_copy">Copy all logs</string>
+    <string name="v4_cd_clear">Clear logs</string>
+    <string name="v4_cd_more">More</string>
+
+    <!-- ══════════ v4 layout: quick action row / FAB ══════════ -->
+    <string name="v4_fab_capture">Start</string>
+    <string name="v4_fab_stop">Stop</string>
+    <string name="v4_process_placeholder">Select app</string>
+
+    <!-- ══════════ v4 layout: stats line ══════════ -->
+    <string name="v4_stats_recent_fmt">Last %1$d lines · %2$s</string>
+    <string name="v4_stats_crash_fmt">Today · %1$d records</string>
+    <string name="v4_stats_crash_range_fmt">%1$s · %2$d records</string>
+    <string name="v4_stats_tail_fmt">Showing %1$d lines · %2$.1f lines/s</string>
+
+    <!-- ══════════ v4 layout: center status card ══════════ -->
+    <string name="v4_status_checking">Checking connection…</string>
+    <string name="v4_status_round_fmt">Round %1$d/%2$d</string>
+    <string name="v4_status_waiting_round_fmt">Waiting for wireless debugging announcement (round %1$d/%2$d)</string>
+    <string name="v4_status_scanning_round_fmt">Scanning for wireless debugging port (round %1$d/%2$d)</string>
+    <string name="v4_status_debug_off">Wireless debugging is off</string>
+    <string name="v4_status_debug_off_sub">No usable port after %1$d rounds</string>
+    <string name="v4_status_no_channel">ADB channel not established yet</string>
+    <string name="v4_go_enable">Turn on wireless debugging</string>
+    <string name="v4_go_connect">Connect</string>
+    <string name="v4_go_pair">Pair</string>
+    <string name="v4_retry">Retry</string>
+
+    <!-- Three distinct failure states: debugging off / not paired / paired but unreachable. -->
+    <string name="v4_status_need_pairing">Not paired yet</string>
+    <string name="v4_status_need_pairing_sub">Wireless debugging is on, but this device is not paired.\nOpen the connect page, tap "Pair device with pairing code", then enter the 6-digit code</string>
+    <string name="v4_status_not_reachable">Cannot reach the device</string>
+    <string name="v4_status_not_reachable_sub">Paired but not connected — usually wireless debugging was switched off or the port changed.\nRe-scan on the connect page</string>
+    <string name="dev_settings_manual_hint">Could not open system settings. Go manually: Settings → System → Developer options → Wireless debugging</string>
+
+    <!-- ══════════ v4 layout: overflow menu ══════════ -->
+    <string name="v4_menu_export">Export to file</string>
+    <string name="v4_menu_startup">Capture on app start</string>
+    <!-- Quick-row toggle for capture-on-start (the menu item keeps the long label) -->
+    <string name="v4_switch_startup">Auto</string>
+    <string name="v4_menu_buffers">Buffers</string>
+    <string name="v4_menu_guide">How to use</string>
+
+    <!-- ══════════ v4 layout: search sheet ══════════ -->
+    <string name="v4_search_title">Search logs</string>
+    <string name="v4_search_placeholder">Type a keyword, filters live…</string>
+    <string name="v4_search_match_mode">Match mode</string>
+    <string name="v4_search_mode_filter">Filter (matches only)</string>
+    <string name="v4_search_mode_highlight">Highlight (keep all, mark yellow)</string>
+    <string name="v4_search_recent">Recent searches</string>
+
+    <!-- ══════════ v4 layout: filter sheet ══════════ -->
+    <string name="v4_filter_title">Filter &amp; capture settings</string>
+    <string name="v4_filter_level">Log level</string>
+    <string name="v4_filter_max_lines">Max lines kept</string>
+    <string name="v4_filter_buffers">Buffers</string>
+    <string name="v4_filter_process_section">Process &amp; misc</string>
+    <string name="v4_filter_app_label">App</string>
+    <string name="v4_filter_app_unset">Not selected</string>
+    <string name="v4_filter_startup_continue">Keep capturing after start</string>
+    <string name="v4_filter_startup_off">Off</string>
+
+    <!-- ══════════ v4 layout: process picker sheet ══════════ -->
+    <string name="v4_picker_title">Select app process</string>
+    <string name="v4_picker_search_hint">Search app name or package…</string>
+    <string name="v4_picker_clear">Clear selection</string>
+
+    <!-- ══════════ v4 layout: crash page ══════════ -->
+    <string name="v4_crash_start_monitor">Start monitoring</string>
+    <string name="v4_crash_stop_monitor">Stop monitoring</string>
+    <string name="v4_crash_monitoring">Monitoring</string>
+    <string name="v4_crash_idle">Not monitoring</string>
+    <!-- Bottom-right FAB: short label per user request -->
+    <string name="v4_crash_monitor_fab">Start</string>
+
+    <!-- ══════════ v4 layout: dialogs / toasts ══════════ -->
+    <string name="v4_toast_copied_lines_fmt">Copied %1$d lines</string>
+    <string name="v4_toast_copied_line">Line copied to clipboard</string>
+    <string name="v4_toast_copied">Copied to clipboard</string>
+
+    <!-- ══════════ v4 布局：运行期状态文案 ══════════ -->
+    <string name="capture_status_probing">Probing channel…</string>
+    <string name="capture_need_package">Capture-on-start needs a target package (tap the process chip)</string>
+    <string name="capture_waiting_start_fmt">Waiting for %1$s to start… (buffering all logs first)</string>
+    <string name="capture_startup_failed_fmt">Capture-on-start failed: %1$s</string>
+    <string name="capture_startup_done_fmt">Capture-on-start done: %1$d lines · PID %2$s · waited %3$ds</string>
+    <string name="capture_startup_done_point_fmt">Capture-on-start done: %1$d lines · PID %2$s · waited %3$ds · start point line %4$d</string>
+    <string name="capture_startup_timeout_fmt">Timed out waiting for %1$s; kept %2$d lines in window</string>
+    <string name="capture_failed_fmt">Capture failed: %1$s</string>
+    <string name="tail_start_failed_fmt">Start failed: %1$s</string>
+    <string name="crash_msg_reading">Reading crash history…</string>
+    <string name="crash_msg_none">No crash history found (no crashes in the last 7 days)</string>
+    <string name="crash_msg_found_fmt">Found %1$d crash records (%2$d new)</string>
+    <string name="crash_msg_read_failed_fmt">Read failed: %1$s</string>
+    <string name="crash_msg_start_failed_fmt">Start failed: %1$s</string>
+    <string name="crash_msg_share_failed_fmt">Share failed: %1$s</string>
 </resources>

@@ -46,6 +46,31 @@ class CrashParser {
         return null
     }
 
+    /**
+     * 段边界判定：这一行是否意味着「上一段崩溃信息已经结束」。
+     *
+     * 用途是流式监控里的提前产出。logcat 的 crash 缓冲区存在**尾部静默**问题：
+     * 一条崩溃写完后很长时间（可能永远）不会有下一行进来，而 [feed] 只在
+     * 「下一行到达」或「流结束」时才 flush——于是用户复现完崩溃回到 App，
+     * 事件还压在解析器的 current 里没交出去，列表看着像没抓到。
+     *
+     * 崩溃块真正结束的标志很明确：时间戳行 + 日志级别前缀，且 tag 换成了别人，
+     * 或 tag 相同但这一行是**新的崩溃起点**。指向当前块的续行（裸行、堆栈、
+     * 同 tag 的后续 log）一律返回 false，不会被误判成边界。
+     *
+     * ★ 只做判定，不动 current —— 保持 [feed] 单独可用的语义不变，
+     *   调用方判定为 true 后再自行调 [flush] 取件。
+     */
+    fun isSegmentBoundary(line: String): Boolean {
+        val cur = current ?: return false
+        val trimmed = line.trimEnd('\n', '\r').trimStart()
+        if (!STAMP_PREFIX.containsMatchIn(trimmed)) return false
+        val key = TAG_PID.find(trimmed)?.let { it.groupValues[2] to it.groupValues[3].toInt() }
+            ?: return true                       // 无 tag 的新时间戳行 → 新段
+        if (key != currentKey) return true       // 换了 tag/pid → 新段
+        return isCrashStart(trimmed)             // 同 tag 的新崩溃起点 → 新段
+    }
+
     /** 结束当前收集（流结束时调用），返回最后一个事件 */
     fun flush(): CrashEvent? {
         val block = current ?: return null

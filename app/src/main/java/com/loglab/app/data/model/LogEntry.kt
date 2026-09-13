@@ -24,6 +24,22 @@ data class LogEntry(
     val level: LogPriority
         get() = LogPriority.from(priority)
 
+    /**
+     * 去掉行首时间戳的原文（列表展示用）。
+     *
+     * ★ 列表里不再显示 `09-04 18:45:14.661`——它每行重复、占掉近半屏宽，
+     * 在手机上把真正要看的内容挤到右边。时间信息并没有丢：
+     * 详情面板、长按复制、导出文件用的都是 [raw]，仍然带完整时间。
+     *
+     * 只对「确实以 timestamp 开头」的行做裁剪，未解析的续行（如堆栈）原样保留。
+     */
+    val rawWithoutTimestamp: String
+        get() = if (timestamp.isNotEmpty() && raw.startsWith(timestamp)) {
+            raw.substring(timestamp.length).trimStart()
+        } else {
+            raw
+        }
+
     companion object {
         private val seq = AtomicLong(0)
         private fun nextId(): Long = seq.incrementAndGet()

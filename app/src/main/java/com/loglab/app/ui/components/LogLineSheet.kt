@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -51,8 +52,12 @@ fun LogLineSheet(
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 头部：级别字母（按级别着色）+ Tag
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 头部：级别字母（按级别着色）+ Tag + 时间戳
+            // ★ 列表里为了省空间不显示时间戳，所以详情里必须补回来，否则等于丢信息。
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (entry.parsed) {
                     Text(
                         "${entry.priority}",
@@ -67,12 +72,22 @@ fun LogLineSheet(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+                if (entry.timestamp.isNotEmpty()) {
+                    Text(
+                        entry.timestamp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.5.sp,
                         maxLines = 1
                     )
                 }
             }
 
-            // 完整原文
+            // 完整原文（带时间戳）——复制走同一份文本，保证复制出来的日志有时间可查
             Text(
                 entry.raw,
                 fontFamily = FontFamily.Monospace,
@@ -87,6 +102,7 @@ fun LogLineSheet(
             // 操作
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
+                    // ★ 带上时间戳：列表里看不到时间，复制出去的多半要贴给别人/存档
                     onClick = { onCopy(entry.raw) },
                     modifier = Modifier.weight(1f)
                 ) { Text(stringResource(R.string.log_copy_raw)) }

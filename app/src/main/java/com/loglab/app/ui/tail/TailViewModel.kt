@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.loglab.app.R
 import com.loglab.app.core.apps.AppInfo
 import com.loglab.app.core.apps.AppInfoProvider
 import com.loglab.app.core.channel.ChannelManager
@@ -104,6 +105,12 @@ class TailViewModel @Inject constructor(
         viewModelScope.launch { settings.update { it.copy(defaultBuffers = buffers) } }
     }
 
+    /**
+     * 应用图标：进程选择器按需调用（LazyColumn 只对可见项请求）。
+     * 取不到返回 null，UI 用首字母占位块兜底。
+     */
+    fun iconFor(pkg: String): android.graphics.drawable.Drawable? = appInfoProvider.icon(pkg)
+
     fun showPicker(show: Boolean) {
         pickerVisible = show
         if (show) refreshApps()
@@ -142,7 +149,7 @@ class TailViewModel @Inject constructor(
         }
         runCatching { ContextCompat.startForegroundService(context, intent) }
             .onFailure {
-                status = "启动失败：${it.message}"
+                status = context.getString(R.string.tail_start_failed_fmt, it.message.orEmpty())
                 logger.log("TAIL", "启动前台服务失败：${it.message}", it)
             }
         paused = false
