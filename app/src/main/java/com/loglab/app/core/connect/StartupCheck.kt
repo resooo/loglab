@@ -121,7 +121,8 @@ class StartupCheck @Inject constructor(
     private val nsd: NsdDiscovery,
     private val channelManager: ChannelManager,
     private val logger: com.loglab.app.core.report.AppLogger,
-    private val nsdCacheCleaner: com.loglab.app.core.adb.NsdCacheCleaner
+    private val nsdCacheCleaner: com.loglab.app.core.adb.NsdCacheCleaner,
+    private val portProbe: com.loglab.app.core.adb.PortProbe
 ) {
     /** 当前检查阶段（供 UI 在"检查中"时显示到哪一步了，避免用户以为卡死） */
     private val _phase = MutableStateFlow(CheckPhase())
@@ -400,6 +401,50 @@ class StartupCheck @Inject constructor(
             }
             rollbackTo(cur.adbHost, cur.adbPort)
             logger.log("CHECK", "第 2 轮无可用新端口，维持失败结论")
+        }
+
+        // ⑤' 主动端口探测（mDNS 失效兜底）——见 [PortProbe] 的类注释。
+        //     触发条件：mDNS 两轮都没给出可用结果。
+        //     必要场景（一加 / ColorOS 实测）：关闭再打开无线调试后，系统 mDNS 解析器
+        //     固守关闭前的旧记录，**新端口的通告始终不出现**（等 60s+ 也无用），
+        //     而旧记录对应端口早已关闭。此时唯有直接探测回环端口才能找到真端口。
+        //     代价可控：回环连接毫秒级，邻域优先 + 全范围并发，实测 2~4 秒。
+        run {
+            setPhase(R.string.check_phase_scan_ports)
+            logger.log("CHECK", "mDNS 未能提供可用端口，转入主动端口探测")
+            val probeStart = System.currentTimeMillis()
+            val found = runCatching {
+                portProbe.scan(knownPorts = buildSet {
+                    add(cur.adbPort)
+                    devices.forEach { add(it.port) }
+                })
+            }.getOrNull().orEmpty()
+            logger.log(
+                "CHECK",
+                "端口探测完成：扫描 ${com.loglab.app.core.adb.PortProbe.PORT_MIN}-${com.loglab.app.core.adb.PortProbe.PORT_MAX}，" +
+                    "命中 ${found.size} 个候选（${System.currentTimeMillis() - probeStart}ms）：" +
+                    found.take(8).joinToString { "${it.port}" }
+            )
+            for (hit in found) {
+                setPhase(R.string.check_phase_trying, LOOPBACK, hit.port)
+                when (tryAdopt(LOOPBACK, hit.port)) {
+                    Verify.OK -> {
+                        logger.log(
+                            "CHECK",
+                            "主动探测端口 ${hit.port} 验证通过（echo 复验 OK），已自动切换" +
+                                "（mDNS 未通告该端口，属系统缓存失效场景）"
+                        )
+                        setPhase()
+                        return@withContext StartupCheckResult.PortUpdated(LOOPBACK, cur.adbPort, hit.port)
+                    }
+                    Verify.DEAD ->
+                        logger.log("CHECK", "探测候选 127.0.0.1:${hit.port} 握手成功但命令执行失败（adbd 半死）")
+                    Verify.UNREACHABLE ->
+                        logger.log("CHECK", "探测候选 127.0.0.1:${hit.port} 连接/握手失败")
+                }
+            }
+            rollbackTo(cur.adbHost, cur.adbPort)
+            logger.log("CHECK", "主动探测未找到可用端口")
         }
 
         // ⑥ 下结论：mDNS 完全无发现且扫描器没有报"发现但解析失败/启动失败" →
