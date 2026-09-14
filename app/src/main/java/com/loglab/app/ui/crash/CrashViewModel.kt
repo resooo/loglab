@@ -3,7 +3,6 @@ package com.loglab.app.ui.crash
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,13 +57,32 @@ class CrashViewModel @Inject constructor(
     /**
      * 按时间范围过滤后的列表（store 只保留 7 天，这里再按页签裁剪）。
      *
-     * ★ 用 derivedStateOf 而不是裸 getter：裸 getter 每次重组都会重算，
-     * 且 Compose 无法把它登记成快照依赖——清空、新增记录时 UI 不会自动刷新。
-     * derivedStateOf 会跟踪 events / range 两个 State 源，任一变化即失效并通知重组。
+     * ★ 依赖源必须是 **Compose State**，不能是 StateFlow.value。
+     *   `events.value` 只是普通属性访问，不会建立快照依赖，derivedStateOf
+     *   因此无法感知 events 变化——表现就是「读取到 N 条历史崩溃」但列表仍显示
+     *   旧数据，直到切换时间页签（range 是 mutableStateOf，能触发失效）才刷新。
+     *
+     *   ViewModel 里不能用 @Composable 的 collectAsState，因此把 events 镜像进
+     *   一个真正的 MutableState（见 [eventsSnapshot]），由 init 里的订阅驱动。
      */
     val filteredEvents: List<CrashEvent> by derivedStateOf {
         val since = range.sinceDate()
-        events.value.filter { it.time.take(10) >= since }
+        eventsSnapshot.value.filter { it.time.take(10) >= since }
+    }
+
+    /**
+     * events 的 Compose State 镜像。
+     *
+     * 把 StateFlow 的最新值同步到本 State 后，derivedStateOf 与组合都能正确
+     * 建立快照依赖——events 一变即触发重算与重组，无需等待切换页签。
+     */
+    private val eventsSnapshot = mutableStateOf<List<CrashEvent>>(emptyList())
+
+    init {
+        // ViewModel 存活期间持续镜像，确保 filteredEvents / contentVersion 总是最新的
+        viewModelScope.launch {
+            events.collect { eventsSnapshot.value = it }
+        }
     }
 
     /**
@@ -110,9 +128,9 @@ class CrashViewModel @Inject constructor(
      */
     val listAnchor: Int get() = listEpoch
 
-    /** 内容版本：条数 + 首条标识，任何新增/清空都会改变它 */
+    /** 内容版本：条数 + 首条标识，任何新增/清空都会改变它（读 Compose State 以建立依赖） */
     val contentVersion: String
-        get() = events.value.let { list ->
+        get() = eventsSnapshot.value.let { list ->
             if (list.isEmpty()) "empty" else "${list.size}-${list[0].time}-${list[0].packageName}-${list[0].type}"
         }
 

@@ -157,7 +157,9 @@ class CrashParser {
      * 提取崩溃进程名，按可靠性顺序尝试：
      *  1. `Fatal signal 11 (SIGSEGV), ... in tid 3280 (pfox.android.tv), pid 3280 (pfox.android.tv)`
      *  2. 老格式 `... thread 3280 (pfox.android.tv)`
-     *  3. tombstone 头 `>>> pfox.android.tv <<<`
+     *  3. tombstone `>>> pkg.name <<<`
+     *  4. tombstone 的 `pid: 18683, tid: 18708, name: CrRendererMain` —— 用同类行里的
+     *     `Process name is <pkg>` 兜底（见 tombstoneProcessName）
      * 子进程名（com.foo:push）取 `:` 前的主包名。
      */
     private fun extractProcessName(text: String): String? =
@@ -166,7 +168,9 @@ class CrashParser {
             Regex("""thread \d+ \(([\w.$]+)"""),
             Regex("""\btid \d+ \(([\w.$]+)"""),
             Regex("""\bpid \d+ \(([\w.$]+)"""),
-            Regex(""">>>\s*([\w.$]+)\s*<<<""")
+            Regex(""">>>\s*([\w.$]+)\s*<<<"""),
+            // tombstone 专有：`Process name is com.foo.bar, uid is 10123`
+            Regex("""Process name is ([\w.$]+)""")
         ).firstNotNullOfOrNull { re -> re.find(text)?.groupValues?.get(1) }
             ?.substringBefore(':')
 
