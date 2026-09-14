@@ -394,6 +394,7 @@
     <string name="crash_msg_reading">正在读取历史崩溃…</string>
     <string name="crash_msg_none">没有找到历史崩溃（最近 7 天内还没有应用崩溃过）</string>
     <string name="crash_msg_found_fmt">读取到 %1$d 条历史崩溃（新增 %2$d 条）</string>
+    <string name="crash_msg_all_known_fmt">读取到 %1$d 条历史崩溃（均已在列表中）</string>
     <string name="crash_msg_read_failed_fmt">读取失败：%1$s</string>
     <string name="crash_msg_start_failed_fmt">启动失败：%1$s</string>
     <string name="crash_msg_share_failed_fmt">分享失败：%1$s</string>

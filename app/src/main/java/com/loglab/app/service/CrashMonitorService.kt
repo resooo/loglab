@@ -100,9 +100,14 @@ class CrashMonitorService : android.app.Service() {
             val parser = CrashParser()
             try {
                 // 只从当天 0 点开始回放：crash buffer 会保留开机以来的全部崩溃，
-                // 不加 -T 的话每次开启监控都把几天前的老崩溃重新解析一遍（刷屏且无意义）
+                // 不加 -T 的话每次开启监控都把几天前的老崩溃重新解析一遍（刷屏且无意义）。
+                // ★ 时间格式必须带年份（ISO 8601 + T 分隔）：不带年份的
+                //   "MM-dd HH:mm:ss.mmm" 在部分 ROM 上不匹配任何行，会导致
+                //   监控启动后一条都读不到（表现为「开始监控后崩溃不刷新」）。
                 val today = java.time.LocalDate.now()
-                val since = "%02d-%02d 00:00:00.000".format(today.monthValue, today.dayOfMonth)
+                val since = "%04d-%02d-%02dT00:00:00.000".format(
+                    today.year, today.monthValue, today.dayOfMonth
+                )
                 channelManager.adbChannel.executeStream("logcat -b crash -v time -T \"$since\"")
                     .collect { line ->
                         // ★ 段边界先于 feed 判断：feed 会「用新行结束旧块」，

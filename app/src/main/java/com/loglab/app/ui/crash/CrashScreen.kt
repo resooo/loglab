@@ -209,10 +209,14 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                     }
 
                     // items 带 key：新记录插入后 LazyColumn 能正确复用/重建可见项。
-                    // key 里混入 viewModel.listAnchor（回到前台刷新时递增），
-                    // 覆盖「近7天页签下新记录插在列表中段」时的重绘盲区。
+                    // key 混入 viewModel.listAnchor / contentVersion：
+                    //   - listAnchor：回到前台刷新、清空时整表失效
+                    //   - contentVersion：记录条数或首条变化时立即失效
+                    // 覆盖两种盲区：①「近7天页签下新记录插在列表中段」
+                    //              ②「监控运行中页面是热的、不走 ON_RESUME」时的即时刷新
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         val anchor = viewModel.listAnchor
+                        val stamp = viewModel.contentVersion
                         if (monitoring) {
                             item(key = "hint-$anchor") {
                                 Text(
@@ -239,7 +243,7 @@ fun CrashScreen(viewModel: CrashViewModel = hiltViewModel()) {
                         }
                         itemsIndexed(
                             items = shownEvents,
-                            key = { _, e -> "$anchor|${e.time}|${e.packageName}|${e.type}" }
+                            key = { _, e -> "$anchor|$stamp|${e.time}|${e.packageName}|${e.type}" }
                         ) { index, event ->
                             CrashRow(
                                 event = event,

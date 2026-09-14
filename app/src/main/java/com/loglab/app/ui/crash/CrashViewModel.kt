@@ -79,6 +79,9 @@ class CrashViewModel @Inject constructor(
      * 避免用户正在滚动列表时被无谓重建、丢失滚动位置。
      */
     fun refresh() {
+        // events 是 StateFlow<List>，每次写入都会换成新引用。这里保持「引用变了才推进」
+        // 的语义，避免用户滚动列表时被无谓重建；监控中的即时刷新由 listAnchor 的
+        // 内容派生部分（见下）负责，不再依赖本函数。
         val snapshot = events.value
         if (snapshot !== lastSeen) {
             lastSeen = snapshot
@@ -88,14 +91,30 @@ class CrashViewModel @Inject constructor(
 
     private var lastSeen: List<CrashEvent>? = null
 
-    /**
-     * 列表锚点：随 [listEpoch] 变化。
-     *
-     * 用作 LazyColumn 的 key 前缀——新崩溃入库（在已有列表里按时间插入，不是简单
-     * 头部追加）或列表被清空时，靠它让 LazyColumn 重建可见项、真正把变化画出来。
-     */
     private var listEpoch by mutableStateOf(0)
+
+    /**
+     * 列表锚点：LazyColumn 的 key 前缀。
+     *
+     * 由两部分组合而成：
+     *  1. [listEpoch] —— 清空 / 回到前台刷新时递增，整表替换场景用；
+     *  2. **内容指纹** —— 记录条数与首条记录的标识。
+     *
+     * ★ 第二部分是关键：监控运行期间页面一直是「热」的，不会触发 ON_RESUME，
+     *   而新崩溃是按时间**插入列表中段**（不是头部追加）。此时若锚点不变，
+     *   LazyColumn 会认为那些 key 还活着而复用旧布局，界面看起来「监控了但没刷新」。
+     *   把内容指纹并入锚点后，events 一变锚点立刻变，列表即时重绘。
+     *
+     * 指纹只用稳定量（size + 首条的时间/包名/类型），不用 hashCode 之类的
+     * 概率性数值，避免碰撞导致该刷新时不刷新。
+     */
     val listAnchor: Int get() = listEpoch
+
+    /** 内容版本：条数 + 首条标识，任何新增/清空都会改变它 */
+    val contentVersion: String
+        get() = events.value.let { list ->
+            if (list.isEmpty()) "empty" else "${list.size}-${list[0].time}-${list[0].packageName}-${list[0].type}"
+        }
 
     /**
      * 清空全部记录。
@@ -157,21 +176,42 @@ class CrashViewModel @Inject constructor(
                     ?: channelManager.autoConnect(settings.policyOnce())
                         .getOrThrow().let { channelManager.active() }
                     ?: error("ADB 未连接")
-                // 回放窗口=保留窗口（7 天）：-T 时间参数不破坏缓冲区，只是截断输出
+                // 回放窗口=保留窗口（7 天）。
+                // ★ -T 的时间格式必须带年份（yyyy-MM-ddTHH:mm:ss.SSS）：
+                //   不带年份的 "MM-dd HH:mm:ss.mmm" 在部分 ROM 上不匹配任何行，
+                //   表现为「明明有崩溃却提示没找到」。用 ISO 8601 + T 分隔最稳。
                 val since = java.time.LocalDate.now().minusDays(6)
-                val sinceStr = "%02d-%02d 00:00:00.000".format(since.monthValue, since.dayOfMonth)
+                val sinceStr = "%04d-%02d-%02dT00:00:00.000".format(
+                    since.year, since.monthValue, since.dayOfMonth
+                )
                 channel.execute("logcat -b crash -d -v time -T \"$sinceStr\"").getOrThrow()
             }
             output.onSuccess { text ->
+                // ★ 必须与 CrashMonitorService 用同一套「段边界 + feed」逻辑：
+                //   CrashParser 是增量解析器，只在遇到下一条崩溃的开头时才产出上一条，
+                //   最后一条会一直留在解析器里——缓冲区尾部静默时它就永远出不来。
+                //   仅靠末尾一次 flush() 不够（顺序也反了：flush 应在 feed 之后），
+                //   这正是「读取历史提示没有找到、切到近 7 天却能看到」的根因。
                 val parser = CrashParser()
-                val found = text.lineSequence().mapNotNull { parser.feed(it) }.toList() +
-                    listOfNotNull(parser.flush())
+                val found = buildList {
+                    text.lineSequence().forEach { line ->
+                        if (parser.isSegmentBoundary(line)) parser.flush()?.let { add(it) }
+                        parser.feed(line)?.let { add(it) }
+                    }
+                    parser.flush()?.let { add(it) }
+                }
                 val added = store.addAll(found)
+                // 提示文案区分三种情况，避免「读到重复记录」被误报成「没找到」：
+                //   found 为空          → 最近 7 天确实没有崩溃
+                //   found 非空但新增 0  → 记录已存在（去重命中）
                 store.setMessage(
-                    if (found.isEmpty()) context.getString(R.string.crash_msg_none)
-                    else context.getString(R.string.crash_msg_found_fmt, found.size, added)
+                    when {
+                        found.isEmpty() -> context.getString(R.string.crash_msg_none)
+                        added == 0 -> context.getString(R.string.crash_msg_all_known_fmt, found.size)
+                        else -> context.getString(R.string.crash_msg_found_fmt, found.size, added)
+                    }
                 )
-                logger.log("CRASH", "历史崩溃读取完成：${found.size} 条，新增 $added 条")
+                logger.log("CRASH", "历史崩溃读取完成：解析 ${found.size} 条，新增 $added 条")
             }.onFailure {
                 store.setMessage(context.getString(R.string.crash_msg_read_failed_fmt, it.message.orEmpty()), isError = true)
                 logger.log("CRASH", "历史崩溃读取失败：${it.message}", it)

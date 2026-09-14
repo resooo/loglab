@@ -391,6 +391,7 @@
     <string name="crash_msg_reading">Reading crash history…</string>
     <string name="crash_msg_none">No crash history found (no crashes in the last 7 days)</string>
     <string name="crash_msg_found_fmt">Found %1$d crash records (%2$d new)</string>
+    <string name="crash_msg_all_known_fmt">Found %1$d crash records (all already listed)</string>
     <string name="crash_msg_read_failed_fmt">Read failed: %1$s</string>
     <string name="crash_msg_start_failed_fmt">Start failed: %1$s</string>
     <string name="crash_msg_share_failed_fmt">Share failed: %1$s</string>
