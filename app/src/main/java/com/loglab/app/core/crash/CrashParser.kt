@@ -83,6 +83,14 @@ class CrashParser {
         return when {
             "FATAL EXCEPTION" in text -> javaCrash(text, block)
             "Fatal signal" in text -> nativeCrash(block)
+            // tombstone 格式（Android 10+ 常见）：
+            //   `*** *** *** *** ***` 分隔头 + `signal 5 (SIGTRAP), code 1 (TRAP_BRKPT)` 行
+            //   注意信号行**不含 "Fatal" 前缀**（那是老格式 F/libc 才有），
+            //   Chrome / WebView / 各类 NDK 应用的崩溃都走这条路。
+            //   此前只认 "Fatal signal" 导致这类崩溃被整体丢弃——
+            //   表现为「crash buffer 里明明有数据，解析出来 0 条」。
+            TOMBSTONE_HEADER.containsMatchIn(text) && SIGNAL_LINE.containsMatchIn(text) ->
+                nativeCrash(block)
             "ANR in" in text -> anrCrash(block)
             else -> null   // crash buffer 里的普通日志，不是崩溃
         }
@@ -117,8 +125,12 @@ class CrashParser {
 
     private fun nativeCrash(block: List<String>): CrashEvent {
         val first = block.first()
-        val sig = Regex("Fatal signal \\d+ \\(([^)]+)\\)").find(first)?.groupValues?.get(1)
         val text = block.joinToString("\n").trimEnd()
+        // 信号名两种格式：
+        //   老：Fatal signal 11 (SIGSEGV), ...
+        //   新：signal 5 (SIGTRAP), code 1 (TRAP_BRKPT), ...  ← tombstone
+        val sig = Regex("Fatal signal \\d+ \\(([^)]+)\\)").find(first)?.groupValues?.get(1)
+            ?: SIGNAL_LINE.find(text)?.groupValues?.get(1)
         return CrashEvent(
             time = parseStamp(first) ?: "",
             packageName = extractProcessName(text),
@@ -167,13 +179,27 @@ class CrashParser {
     }
 
     private fun isCrashStart(line: String): Boolean =
-        "FATAL EXCEPTION" in line || "Fatal signal" in line || "ANR in" in line
+        "FATAL EXCEPTION" in line || "Fatal signal" in line || "ANR in" in line ||
+            TOMBSTONE_HEADER.containsMatchIn(line)
 
     private companion object {
         private val STAMP_PREFIX = Regex("^\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d+")
         private val STAMP_TIME = Regex("(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})")
         /** `E/AndroidRuntime( 3280):` / `F/libc    ( 3280):` → group2=tag, group3=pid */
         private val TAG_PID = Regex("([VDIWEF])/([\\w.-]+)\\s*\\(\\s*(\\d+)\\)")
+
+        /**
+         * tombstone 崩溃头：`*** *** *** *** ***` 或 `*** engrave_tombstone_ucontext ***`。
+         * 这是 Android 10+ 由 debuggerd 写入 crash buffer 的标准格式，
+         * Chrome / WebView / 各类 NDK 崩溃都走这条路。
+         */
+        private val TOMBSTONE_HEADER = Regex("""\*\*\*.*tombstone|\*\*\* \*\*\* \*\*\*""")
+
+        /**
+         * tombstone 的信号行：`signal 5 (SIGTRAP), code 1 (TRAP_BRKPT), fault addr --------`
+         * 注意**没有** "Fatal" 前缀（老格式 F/libc 才是 `Fatal signal 11 (SIGSEGV)`）。
+         */
+        private val SIGNAL_LINE = Regex("""signal \d+ \((SIG[A-Z]+)\)""")
         private val EXC_MARK = Regex("(Exception|Error)\\b")
         private const val MAX_BLOCK_LINES = 400
     }

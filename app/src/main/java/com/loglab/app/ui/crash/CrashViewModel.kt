@@ -177,13 +177,12 @@ class CrashViewModel @Inject constructor(
                         .getOrThrow().let { channelManager.active() }
                     ?: error("ADB 未连接")
                 // 回放窗口=保留窗口（7 天）。
-                // ★ -T 的时间格式必须带年份（yyyy-MM-ddTHH:mm:ss.SSS）：
-                //   不带年份的 "MM-dd HH:mm:ss.mmm" 在部分 ROM 上不匹配任何行，
-                //   表现为「明明有崩溃却提示没找到」。用 ISO 8601 + T 分隔最稳。
+                // ★ -T 的时间格式必须是 "MM-dd HH:mm:ss.SSS"（**不带年份**）：
+                //   logcat 的 -T 只按此格式解析，实测带年份的 ISO 8601
+                //   （"2026-09-14T00:00:00.000"）会被判为不匹配而过滤掉**全部**输出，
+                //   表现为「历史崩溃一条都读不到」。同理单独给 "MM-dd" 也不行。
                 val since = java.time.LocalDate.now().minusDays(6)
-                val sinceStr = "%04d-%02d-%02dT00:00:00.000".format(
-                    since.year, since.monthValue, since.dayOfMonth
-                )
+                val sinceStr = "%02d-%02d 00:00:00.000".format(since.monthValue, since.dayOfMonth)
                 channel.execute("logcat -b crash -d -v time -T \"$sinceStr\"").getOrThrow()
             }
             output.onSuccess { text ->
