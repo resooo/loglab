@@ -21,3 +21,7 @@ keystore.pw.local
 
 # 临时截图（不入库）
 /screen.png
+
+# 本地代码图谱索引 / 构建产物
+/.codegraph/
+/*.apk
