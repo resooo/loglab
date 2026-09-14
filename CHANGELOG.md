@@ -3,6 +3,28 @@
 All notable changes to LogLab are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versioning follows [SemVer](https://semver.org/).
 
+## [1.9.5] - 2026-09-14
+
+### Fixed
+- **Reading crash history reported "nothing found" — the `-T` time format was wrong** (introduced in 1.9.4, fixed here). `logcat`'s `-T` accepts only `MM-DD HH:mm:ss.mmm` (**no year**). The 1.9.4 build switched it to ISO 8601 (`2026-09-14T00:00:00.000`), which `logcat` fails to parse literally and consequently filters out **every** line. Measured on a OnePlus / Android 16 with 69 lines in the crash buffer:
+  | `-T` value | lines returned |
+  |---|---|
+  | `09-14 00:00:00.000` | ✅ 69 |
+  | `2026-09-14T00:00:00.000` | ❌ 1 |
+  | `09-14` | ❌ 0 |
+
+  Both call sites (`CrashViewModel.readHistory`, `CrashMonitorService`) are back to the year-less format.
+- **tombstone-format native crashes were discarded entirely.** `CrashParser` only recognised the legacy `Fatal signal 11 (SIGSEGV)` wording, but on Android 10+ debuggerd writes a different shape into the crash buffer:
+  ```
+  *** engrave_tombstone_ucontext ***
+  signal 5 (SIGTRAP), code 1 (TRAP_BRKPT), fault addr --------
+  ```
+  The signal line has **no `Fatal` prefix**, so Chrome / WebView / every NDK app that crashed this way was treated as an ordinary log line and dropped — "the crash buffer has data but zero records are parsed". Added `TOMBSTONE_HEADER` / `SIGNAL_LINE` patterns, a tombstone branch in `flush()`, boundary detection for the tombstone header, and signal-name extraction for the new shape. Verified offline against a real 69-line buffer: **0 → 2 records**.
+- **The list did not refresh after loading history** — records were only shown after switching the time-range tab. `filteredEvents` was a `derivedStateOf` reading `events.value`, and **`StateFlow.value` is a plain property access that does not register a Compose snapshot dependency**, so the derived state never learned that `events` had changed. `range` *is* a `mutableStateOf`, which is why switching tabs appeared to fix it. `events` is now mirrored into a real `MutableState` (`eventsSnapshot`, kept in sync from `init`), and both `filteredEvents` and `contentVersion` read that.
+- **Native crashes showed as "unknown app (package not resolved)".** The tombstone process line is
+  `pid: 18683, tid: 18708, name: CrRendererMain  >>> com.android.chrome:sandboxed_process0:org.chromium... <<<`
+  The old pattern required `>>>` to be immediately followed by `<<<`, but the text in between contains `:` — and `[\w.$]` does not match `:`, so the match failed. The pattern is now `>>>\s*([\w.$]+)` and `Process name is <pkg>` is tried first (it is the most reliable tombstone source).
+
 ## [1.9.4] - 2026-09-14
 
 ### Fixed

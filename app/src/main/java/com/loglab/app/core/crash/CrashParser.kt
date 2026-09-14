@@ -157,9 +157,8 @@ class CrashParser {
      * 提取崩溃进程名，按可靠性顺序尝试：
      *  1. `Fatal signal 11 (SIGSEGV), ... in tid 3280 (pfox.android.tv), pid 3280 (pfox.android.tv)`
      *  2. 老格式 `... thread 3280 (pfox.android.tv)`
-     *  3. tombstone `>>> pkg.name <<<`
-     *  4. tombstone 的 `pid: 18683, tid: 18708, name: CrRendererMain` —— 用同类行里的
-     *     `Process name is <pkg>` 兜底（见 tombstoneProcessName）
+     *  3. tombstone `Process name is com.foo.bar, uid is 10123`（最优先的 tombstone 来源）
+     *  4. tombstone 的 `>>> pkg.sub:proc <<<`（冒号后是子进程名，需截断）
      * 子进程名（com.foo:push）取 `:` 前的主包名。
      */
     private fun extractProcessName(text: String): String? =
@@ -168,9 +167,13 @@ class CrashParser {
             Regex("""thread \d+ \(([\w.$]+)"""),
             Regex("""\btid \d+ \(([\w.$]+)"""),
             Regex("""\bpid \d+ \(([\w.$]+)"""),
-            Regex(""">>>\s*([\w.$]+)\s*<<<"""),
             // tombstone 专有：`Process name is com.foo.bar, uid is 10123`
-            Regex("""Process name is ([\w.$]+)""")
+            Regex("""Process name is ([\w.$]+)"""),
+            // tombstone 的 `>>> com.foo.bar:subproc <<<`：
+            // ★ 不能用 [\w.$]+ 后接 <<< —— 冒号后的子进程名含 ':'，
+            //   会让「主包名 + <<<」的匹配失败（实测 com.android.chrome:sandboxed_... 匹配不到）。
+            //   这里只取 '>>>' 之后到 ':'、空格或 '<' 为止的主包名部分。
+            Regex(""">>>\s*([\w.$]+)""")
         ).firstNotNullOfOrNull { re -> re.find(text)?.groupValues?.get(1) }
             ?.substringBefore(':')
 

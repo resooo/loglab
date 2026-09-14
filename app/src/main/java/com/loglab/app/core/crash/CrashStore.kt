@@ -115,7 +115,7 @@ class CrashStore @Inject constructor(
     private fun load(): List<CrashEvent> = runCatching {
         if (!file.exists()) return emptyList()
         val list = json.decodeFromString<List<CrashEvent>>(file.readText())
-        // 双重过滤：
+        // 多重过滤：
         // 1) 丢掉旧版解析产生的无包名残缺记录（Native 进程名未提取、Java 堆栈被打散），
         //    崩溃监控回放后会以修复后的解析重新入库；
         // 2) 只保留近 7 天的崩溃（跨天启动即自动清理过期记录）
