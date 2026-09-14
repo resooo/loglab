@@ -3,9 +3,14 @@
 All notable changes to LogLab are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versioning follows [SemVer](https://semver.org/).
 
-## [Unreleased] — 2026-09-13
+## [1.9.4] - 2026-09-14
 
-Working tree state after the 1.9.3 build. **versionCode / versionName were intentionally left at 27 / 1.9.3** at the requester's instruction ("keep 1.9.3, do not bump yet"), so this section is not yet a released version. Bump before the next release.
+### Fixed
+- **After turning wireless debugging off and on again, the app could not find the new port** (OnePlus / Android 16, reproduced from logcat).
+  - *Root cause*: the system mDNS resolver (`mdnsd` behind `NsdManager`) keeps serving **stale records** for the old ports. Logs show it repeatedly advertising `35939` / `40357` — ports that are long dead (TLS handshake still succeeds, but the adbd behind them is half-dead, so `echo` fails) — while the **real new port never appears in any advertisement**, even after waiting 60+ seconds. mDNS had become unreliable as the sole source of port discovery on this ROM.
+  - *Fix*: added `PortProbe`, an active loopback port scanner used as a fallback once both mDNS rounds fail. It scans the known-port neighbourhood (±3000) first, then the full `30000–65000` range concurrently (loopback connects are ~1 ms; measured **1.6 s** for the whole range), and returns at most 8 candidates. It only tests TCP reachability — adbd identity is still confirmed by the `echo` re-verification, so ports belonging to other apps are rejected naturally.
+  - *Result*: the log shows the true port found and adopted in ~1.6 s (`45311 → 44245`), fully automatic, where the previous build reported "wireless debugging is off".
+- **App exit now clears the mDNS cache association.** Since Android exposes no API to flush the system mDNS cache, two measures are combined on `ON_STOP`: `stopServiceDiscovery` (which makes the resolver drop the cache entries tied to that discovery session, so the next launch queries afresh instead of reusing stale results) and a TCP liveness probe of the known ports, whose failures are recorded in a 30-minute stale list so they are tried last on the next launch even if the system still returns them.
 
 ### Fixed
 - **Crash records were captured but never appeared in the list** (two independent causes):
