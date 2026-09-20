@@ -224,6 +224,12 @@
     <string name="scan_start">Scanning nearby wireless debugging devices…</string>
     <string name="scan_none_hint">No devices found. Some ROMs (e.g. ColorOS) disable scanning — expand "Manual address" and type the IP:port shown on the Wireless debugging screen</string>
     <string name="scan_found_fmt">Found %1$d services — tap the "Wireless debugging" one to connect; pairing port auto-filled</string>
+    <string name="scan_found_alive_fmt">Found %1$d services, %2$d with a reachable port (pinned to the top, marked ✅)</string>
+    <string name="scan_found_all_dead_fmt">Found %1$d services, but no port is reachable (stale records in the system mDNS cache) — toggle wireless debugging off and on, then rescan</string>
+    <string name="scan_alive_tag">Reachable</string>
+    <string name="scan_dead_tag">Stale</string>
+    <string name="scan_closed_tag">Port closed</string>
+    <string name="scan_recommend_tag">Recommended</string>
     <string name="pairing_port_only_fmt">%1$s:%2$d is a pairing port, for one-time pairing only and cannot capture logs; pick the "Wireless debugging" one instead</string>
     <string name="scan_connected_fmt">Connected to 127.0.0.1:%1$d</string>
     <string name="connect_failed_fmt">Entered 127.0.0.1:%1$d but connection failed: %2$s</string>

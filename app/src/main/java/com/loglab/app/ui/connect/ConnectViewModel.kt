@@ -91,13 +91,36 @@ class ConnectViewModel @Inject constructor(
         viewModelScope.launch {
             scanning = true
             scanMessage = context.getString(R.string.scan_start)
-            val devices = withContext(Dispatchers.IO) {
+            val raw = withContext(Dispatchers.IO) {
                 runCatching { nsd.discover(7000).toList().lastOrNull() ?: emptyList() }
                     .getOrDefault(emptyList())
             }
+            // ★ 扫描后做并发 TCP 探活并按可用性排序：
+            //   mDNS 会把已关闭的旧端口当有效服务继续通告（幽灵记录），
+            //   真机上真实端口常排在列表末尾，用户无从判断该点哪个。
+            //   探活是回环连接（毫秒级），整批 < 500ms，可接受。
+            val ranked = runCatching { nsd.rankByLiveness(raw) }.getOrDefault(emptyList())
+            val devices = ranked.map {
+                it.device.copy(alive = it.alive, stale = it.stale)
+            }
             discoveredDevices = devices
+            if (devices.isNotEmpty()) {
+                val aliveCount = devices.count { it.alive == true }
+                logger.log(
+                    "UI",
+                    "扫描完成：${devices.size} 个服务，探活通过 $aliveCount 个" +
+                        devices.joinToString("") { d ->
+                            "\n  · ${d.port} ${d.label} ${when {
+                                d.stale -> "[已失效]"
+                                d.alive == true -> "[可用]"
+                                d.alive == false -> "[端口关闭]"
+                                else -> ""
+                            }}"
+                        }
+                )
+            }
             // 上报本轮端口，供 App 退出时探活/证伪
-            nsdCacheCleaner.reportScannedPorts(devices.map { it.port })
+            nsdCacheCleaner.reportScannedPorts(raw.map { it.port })
 
             // 自动填配对端口（仅当用户还没填时）
             if (pairPort.isBlank()) {
@@ -107,10 +130,17 @@ class ConnectViewModel @Inject constructor(
                 }
             }
 
+            // 「可用」条目优先提示，避免用户被幽灵端口误导
+            val aliveCount = devices.count { it.alive == true }
             scanMessage = when {
                 devices.isEmpty() ->
                     context.getString(R.string.scan_none_hint)
-                else -> context.getString(R.string.scan_found_fmt, devices.size)
+                // 有探活通过的条目 → 明确告知可用数量，并在列表里高亮推荐项
+                aliveCount > 0 ->
+                    context.getString(R.string.scan_found_alive_fmt, devices.size, aliveCount)
+                // 扫到服务但全部探活失败 → 提示这些是过期记录，而不是让用户逐个试
+                else ->
+                    context.getString(R.string.scan_found_all_dead_fmt, devices.size)
             }
             scanning = false
         }

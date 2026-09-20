@@ -4,7 +4,10 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -52,7 +56,16 @@ class NsdDiscovery @Inject constructor(@ApplicationContext context: Context) {
         /** 是否为「无线调试」的 TLS 连接端口（唯一可用于抓日志的无线通道） */
         val tls: Boolean,
         val kind: Kind = Kind.UNKNOWN,
-        val serviceType: String = ""
+        val serviceType: String = "",
+        /**
+         * TCP 探活结果。扫描后由 [rankByLiveness] 填充：
+         *  - true  → 端口可连接，大概率可用
+         *  - false → 端口已关闭（mDNS 幽灵记录），点了也会「握手成功但命令执行失败」
+         *  - null  → 尚未探测（如用户手动构造的条目）
+         */
+        val alive: Boolean? = null,
+        /** 是否处于「近期被证伪」的 30 分钟观察窗内 */
+        val stale: Boolean = false
     ) {
         val label: String
             get() = when (kind) {
@@ -60,6 +73,23 @@ class NsdDiscovery @Inject constructor(@ApplicationContext context: Context) {
                 Kind.PAIRING -> "配对端口(仅配对用，不可抓日志)"
                 Kind.PLAIN -> "明文 adb tcpip"
                 Kind.UNKNOWN -> "未知服务"
+            }
+
+        /**
+         * 这条记录是否值得优先点。用于 UI 高亮「推荐」。
+         *
+         * 判定为可用的条件：TLS 连接端口 + 探活通过 + 不在证伪窗口内。
+         * alive == null（未探测）时保守返回 false，不给用户错误暗示。
+         */
+        val recommended: Boolean
+            get() = kind == Kind.TLS_CONNECT && alive == true && !stale
+
+        /** 该条目的状态说明，供 UI 在端口旁显示灰色小字 */
+        val statusHint: String?
+            get() = when {
+                stale -> "已失效"
+                alive == false -> "端口已关闭"
+                else -> null
             }
     }
 
@@ -278,6 +308,55 @@ class NsdDiscovery @Inject constructor(@ApplicationContext context: Context) {
             synchronized(activeListeners) { activeListeners.remove(listener) }
         }
     }
+
+    /**
+     * 对一批设备做**并发** TCP 探活，并按可用性排序。
+     *
+     * 背景（真机实测，OnePlus / Android 16）：
+     * mDNS 会把**已关闭的旧端口**当作有效服务继续通告（幽灵记录），
+     * 而真实端口往往排在列表末尾。用户看到多个「无线调试(TLS)」条目时
+     * 无从判断该点哪个——点错就卡在「握手成功但命令执行失败（adbd 半死）」。
+     *
+     * 排序规则（稳定性优先，同组内保持 mDNS 原始顺序）：
+     *   ① 已证伪（recently probed dead / 30 分钟黑名单）→ 沉底
+     *   ② 探活失败 → 沉底
+     *   ③ 配对端口（不可用于抓日志）→ 次底
+     *   ④ 活着的 TLS 连接端口 → 置顶
+     *
+     * 回环探活毫秒级返回，整批通常 < 500ms，可在扫描后同步等待。
+     *
+     * @param devices 原始 mDNS 扫描结果（保序）
+     * @return 排序后的结果；元素附带 [DeviceLive] 活性标记
+     */
+    suspend fun rankByLiveness(devices: List<Device>): List<RankedDevice> =
+        withContext(Dispatchers.IO) {
+            // 并发探活：每个候选一个协程，整体耗时 ≈ 单个超时（400ms）
+            val probes = devices.map { d ->
+                async {
+                    // 配对端口不用于抓日志，探活意义不大但也无害；其它端口做 TCP 探测
+                    val alive = probePort(d.port)
+                    RankedDevice(d, alive, isStale(d.port))
+                }
+            }.awaitAll()
+
+            probes.sortedWith(
+                compareBy(
+                    // ① 死端口 / 已证伪 → 后置
+                    { it.stale || !it.alive },
+                    // ② 配对端口（不能抓日志）→ 后置
+                    { it.device.kind == Kind.PAIRING }
+                )
+            )
+        }
+
+    /** 带活性标记的扫描结果 */
+    data class RankedDevice(
+        val device: Device,
+        /** TCP 探活是否通过（回环端口可连接） */
+        val alive: Boolean,
+        /** 是否处于「近期被证伪」的 30 分钟观察窗内 */
+        val stale: Boolean
+    )
 
     /**
      * 对给定端口做 TCP 探活（只判断能否建立连接，不做 TLS 握手）。

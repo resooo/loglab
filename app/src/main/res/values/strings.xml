@@ -226,6 +226,12 @@
     <string name="scan_start">正在扫描附近的无线调试设备…</string>
     <string name="scan_none_hint">未发现设备。部分厂商（如 ColorOS）会禁用扫描，可展开「手动填写地址」填入无线调试主界面的 IP:端口</string>
     <string name="scan_found_fmt">找到 %1$d 个服务，点「无线调试」即可连接；配对端口已自动填入</string>
+    <string name="scan_found_alive_fmt">找到 %1$d 个服务，其中 %2$d 个端口可连接（已在列表中置顶并标 ✅）</string>
+    <string name="scan_found_all_dead_fmt">找到 %1$d 个服务，但端口均无法连接（系统 mDNS 缓存里的过期记录）——请重新开关一次无线调试后重扫</string>
+    <string name="scan_alive_tag">可连接</string>
+    <string name="scan_dead_tag">已失效</string>
+    <string name="scan_closed_tag">端口已关闭</string>
+    <string name="scan_recommend_tag">推荐</string>
     <string name="pairing_port_only_fmt">%1$s:%2$d 是配对端口，仅用于一次性配对，不能抓日志，请选择「无线调试」那一项</string>
     <string name="scan_connected_fmt">已连接 127.0.0.1:%1$d</string>
     <string name="connect_failed_fmt">已填入 127.0.0.1:%1$d，但连接失败：%2$s</string>

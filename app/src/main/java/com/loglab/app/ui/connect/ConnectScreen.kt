@@ -160,13 +160,19 @@ fun ConnectScreen(
                 modifier = Modifier.fillMaxWidth()
             ) { Text(if (viewModel.scanning) stringResource(R.string.scanning_fmt) else stringResource(R.string.scan_nearby)) }
             viewModel.scanMessage?.let { CopyableText(text = it) }
+            // 列表已按可用性排序（活端口在前、幽灵端口沉底），这里只负责标记
+            // 「推荐」只打在第一个可用项上，避免多处高亮反而让人不知道该点哪个
+            val recommendedPort = viewModel.discoveredDevices.firstOrNull { it.recommended }?.port
             viewModel.discoveredDevices.forEach { device ->
                 DeviceLine(
                     // loopback 方案：连接地址恒为 127.0.0.1:端口，mDNS 的 host 不再展示为主地址
                     text = if (device.kind == NsdDiscovery.Kind.PAIRING) "${device.host}:${device.port}"
                     else "127.0.0.1:${device.port}",
                     kind = device.label + if (device.serviceName.isNotBlank()) " · ${device.serviceName}" else "",
-                    clickable = device.kind != NsdDiscovery.Kind.PAIRING
+                    clickable = device.kind != NsdDiscovery.Kind.PAIRING,
+                    alive = device.alive,
+                    stale = device.stale,
+                    recommended = device.port == recommendedPort
                 ) {
                     viewModel.chooseDevice(device)
                 }
@@ -290,14 +296,26 @@ private fun Step(n: String, text: String) {
     }
 }
 
-/** 设备行：monospace 地址 + 类型标注，点击连接 */
+/** 设备行：monospace 地址 + 类型标注 + 活性标记，点击连接 */
 @Composable
 private fun DeviceLine(
     text: String,
     kind: String,
     clickable: Boolean,
+    /** 该端口是否探活通过；null 表示未探测（不显示标记） */
+    alive: Boolean? = null,
+    /** 是否处于证伪观察窗内 */
+    stale: Boolean = false,
+    /** 是否是推荐项（首个可用端口） */
+    recommended: Boolean = false,
     onClick: () -> Unit
 ) {
+    // 状态色：可用=主色，失效/关闭=灰，未探测=主色（保持原样）
+    val dead = stale || alive == false
+    val dotColor = when {
+        dead -> MaterialTheme.colorScheme.outlineVariant
+        else -> MaterialTheme.colorScheme.primary
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -310,25 +328,50 @@ private fun DeviceLine(
         Box(
             modifier = Modifier
                 .size(7.dp)
-                .background(
-                    if (clickable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                    CircleShape
-                )
+                .background(dotColor, CircleShape)
         )
-        Text(
-            text,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 13.sp,
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 8.dp)
-        )
-        Text(
-            kind,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    // 失效条目整行降透明度，一眼区分「能点的」和「过期的」
+                    color = if (dead) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface
+                )
+                // 推荐标记：只给列表里第一个可用端口打，避免多处高亮反而不知道该点哪个
+                if (recommended) {
+                    Text(
+                        stringResource(R.string.scan_recommend_tag),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+            }
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                kind,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            // 失效原因说明：让用户明白为什么这条不该点
+            if (dead) {
+                Text(
+                    stringResource(if (stale) R.string.scan_dead_tag else R.string.scan_closed_tag),
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.outline,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
