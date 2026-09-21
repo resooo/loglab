@@ -41,3 +41,6 @@ module-info.class
 
 # 本地提交信息草稿（多行中文 commit 用 git commit -F 引用，不入库）
 /commit-msg.local.txt
+
+# 从 CI 下载的发布产物（校验用，不入库）
+/dist/
