@@ -24,6 +24,18 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # 必须显式指定 packages：该 action 的默认值是 `tools platform-tools`，
+          # 其中 `tools` 是**已废弃的 legacy 包**，会连带要求
+          # `android-sdk-preview-license`。实测该许可证在 CI 里无法被自动接受
+          # （日志：`Accept? (y/N):` 后卡住 → 步骤失败），
+          # 导致整个 release 构建在 "Set up Android SDK" 就中断。
+          #
+          # 这里只装项目真正需要的三项，与 app/build.gradle.kts 对齐：
+          #   compileSdk = 35 / buildToolsVersion = "35.0.0" / 无 NDK
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          # 静默接受许可证：否则日志会被整段许可证正文刷屏，淹没真正的错误
+          log-accepted-android-sdk-licenses: false
 
       - name: Decode signing keystore
         env:
@@ -44,9 +56,24 @@ jobs:
 
       - name: Rename APK
         run: |
-          # 附件命名：LogLab_v<tag>.apk（tag 形如 v1.9.4）
+          # 产物名兼容两种情况：
+          #  - app/build.gradle.kts 的 androidComponents 逻辑已把它命名为
+          #    LogLab_v<version>.apk（这是常态）；
+          #  - 该逻辑用反射调 outputFileName，失败时会静默退回 AGP 默认的
+          #    app-release.apk。
+          # 因此这里不写死文件名，而是取目录里唯一的 .apk，
+          # 再统一按 tag 重命名（附件名与 tag 严格一致，便于用户对应版本）。
+          set -e
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/LogLab_v${GITHUB_REF_NAME#v}.apk"
+          SRC=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
+          if [ -z "$SRC" ]; then
+            echo "::error::构建产物不存在，release 目录下没有 .apk"
+            exit 1
+          fi
+          echo "找到产物: $SRC ($(stat -c%s "$SRC") 字节)"
+          DEST="dist/LogLab_v${GITHUB_REF_NAME#v}.apk"
+          cp "$SRC" "$DEST"
+          echo "已重命名为: $DEST"
 
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
