@@ -22,6 +22,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.loglab.app.service.CrashMonitorService
 
 /** 崩溃列表时间范围：今天 / 近 7 天 */
 enum class CrashRange(val days: Int, val label: String) {
@@ -169,15 +170,15 @@ class CrashViewModel @Inject constructor(
 
     /** 开始监控（交给前台服务，离开 App 也不断） */
     fun start() {
-        val intent = Intent(context, com.loglab.app.service.CrashMonitorService::class.java)
-            .setAction(com.loglab.app.service.CrashMonitorService.ACTION_START)
+        val intent = Intent(context, CrashMonitorService::class.java)
+            .setAction(CrashMonitorService.ACTION_START)
         runCatching { ContextCompat.startForegroundService(context, intent) }
             .onFailure { store.setMessage(context.getString(R.string.crash_msg_start_failed_fmt, it.message.orEmpty()), isError = true) }
     }
 
     fun stop() {
-        val intent = Intent(context, com.loglab.app.service.CrashMonitorService::class.java)
-            .setAction(com.loglab.app.service.CrashMonitorService.ACTION_STOP)
+        val intent = Intent(context, CrashMonitorService::class.java)
+            .setAction(CrashMonitorService.ACTION_STOP)
         runCatching { context.startService(intent) }
     }
 

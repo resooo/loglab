@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.loglab.app.core.channel.ChannelPolicy
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "logcat_grabber_settings")
 
@@ -45,7 +46,7 @@ class SettingsRepository @Inject constructor(
     suspend fun adbHostOnce(): String = current().adbHost
     suspend fun adbPortOnce(): Int = current().adbPort
     suspend fun bridgeUrlOnce(): String = current().bridgeUrl
-    suspend fun policyOnce(): com.loglab.app.core.channel.ChannelPolicy = current().channelPolicy
+    suspend fun policyOnce(): ChannelPolicy = current().channelPolicy
 
     suspend fun rememberPackage(packageName: String) {
         val pkg = packageName.trim()

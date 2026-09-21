@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -221,6 +223,32 @@ fun ConnectScreen(
                     ) { Text(stringResource(R.string.reconnect)) }
                 }
                 viewModel.probeMessage?.let { CopyableText(text = it) }
+            }
+
+            // ==================== 折叠：自动开启无线调试 ====================
+            // 打通「自授权限」这一步后，才能写 Settings.Global 开关无线调试，
+            // 进而实现「启动 App 自动恢复连接」。机制移植自 Shizuku。
+            FoldSection(stringResource(R.string.selfgrant_title)) {
+                Text(
+                    stringResource(R.string.selfgrant_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { viewModel.grantSelfPermission() },
+                    enabled = !viewModel.granting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (viewModel.granting) stringResource(R.string.selfgrant_running)
+                        else stringResource(R.string.selfgrant_button)
+                    )
+                }
+                viewModel.grantMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    CopyableText(text = it)
+                }
             }
 
             // ==================== 折叠：ADB 公钥 ====================

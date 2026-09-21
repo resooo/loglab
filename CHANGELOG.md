@@ -3,6 +3,65 @@
 All notable changes to LogLab are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versioning follows [SemVer](https://semver.org/).
 
+## [1.9.6] - 2026-09-21
+
+### Added
+- **Auto-enable wireless debugging.** Once LogLab has been paired at least once, it can switch
+  "Wireless debugging" on by itself — no more digging through Developer options after a reboot or
+  a system-initiated toggle-off:
+
+  1. **Self-grant** (`SelfGrant`): after a successful connection LogLab runs
+     `pm grant <itself> WRITE_SECURE_SETTINGS` over its own ADB channel. ADB shell is allowed to do
+     this, which is exactly how [Shizuku](https://github.com/RikkaApps/Shizuku) obtains the
+     permission; no root, no Shizuku, no PC required.
+  2. **Auto-toggle** (`WirelessDebugSettings`): with the permission in hand, LogLab writes the
+     three `Settings.Global` keys `adb_wifi_enabled=1`, `ADB_ENABLED=1` and
+     `adb_allowed_connection_time=0` (0 = never expire), then re-discovers the port.
+
+  First-time pairing still has to be done by hand — the 6-digit pairing code is only shown in
+  system UI and cannot be read by apps.
+
+  The grant + toggle flow is now also available from **Settings → Auto-enable wireless debugging**,
+  so it can be set up deliberately rather than only being reachable as a repair action on the
+  Connect screen. The row shows a Granted / Not-granted badge and runs both steps from one button.
+
+### Changed
+- **Startup checks are skipped when nothing can have changed.** The check used to run on every
+  `ON_RESUME`, which in the worst case (wireless debugging off) walks through
+  direct-connect → toggle the switch → first mDNS round → second mDNS round (up to 15 s) →
+  port scan, i.e. 40 s+ of work for what is almost always an unchanged connection. It now skips when
+  **both** the last full check was under 30 s ago **and** the channel is still connected; the
+  explicit "Retry" button always bypasses the shortcut.
+- **The post-reboot port wait window is 15 s instead of 6 s when LogLab enabled wireless debugging
+  itself.** Measured on a OnePlus / Android 16: after writing `adb_wifi_enabled=1`, adbd needs
+  roughly 8 s to restart and re-advertise (00:47:12 toggle → 00:47:20 new port visible). The default
+  6 s window expired first and wasted a round.
+
+### Build
+- **APK is roughly 1.2 MB smaller.** `bcprov` ships post-quantum lookup tables (Picnic / SPHINCS)
+  as `.properties` resources, which `shrinkResources` does not remove; they accounted for ~22% of
+  the APK. LogLab only uses RSA for ADB authentication, so `org/bouncycastle/pqc/**` is excluded.
+- Onboarding images downscaled to 480 px and re-encoded (~62 KB saved).
+- Debug builds now run R8 + resource shrinking too, since the previous unminified debug APK was
+  24.4 MB versus 5.2 MB for release.
+- Added `scripts/prepare-build.sh`: reclaims memory held by leftover Gradle/Kotlin daemons before
+  building. Release builds were intermittently hitting `R8: OutOfMemoryError` because the sandbox
+  had as little as 2.4 GB free; killing stale daemons frees 1–1.5 GB. See
+  `docs/BUILD_TROUBLESHOOTING.md`.
+
+### Internal
+- Foreground-service notifications extracted into `ServiceNotification`, removing ~110 lines of
+  near-verbatim duplication between `LogTailService` and `CrashMonitorService`.
+- Inline fully-qualified class names cleaned up in 39 places.
+
+> **Reverted during development.** An attempt to restructure `StartupCheck` into a step pipeline,
+> unify port liveness checks on a `bind()`-based probe, and change `KadbAdbBackend.probe()` from
+> `connectionCheck()` to an explicit `shell("echo")` call **was reverted before release** — it
+> regressed the (previously working) connection flow. `kadb.connectionCheck()` was the correct
+> API all along; the change was based on sandbox-level socket experiments that do not reflect the
+> third-party library's actual behaviour. All of `core/` is byte-identical to v1.9.5's connection
+> logic. Lesson recorded in `docs/AUTO_WIRELESS_ADB_PLAN.md`.
+
 ## [1.9.5] - 2026-09-14
 
 ### Fixed

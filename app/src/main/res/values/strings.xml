@@ -232,6 +232,29 @@
     <string name="scan_dead_tag">已失效</string>
     <string name="scan_closed_tag">端口已关闭</string>
     <string name="scan_recommend_tag">推荐</string>
+
+    <!-- 自授权限（自动开启无线调试的前置步骤） -->
+    <string name="selfgrant_title">自动开启无线调试</string>
+    <string name="selfgrant_desc">授权后可自动开关「无线调试」，不用每次去开发者选项手动点。\n\n需要先手动开启一次无线调试并连接（用于完成授权），之后即可全自动。</string>
+    <string name="selfgrant_button">授权并开启</string>
+    <string name="selfgrant_running">正在授权…</string>
+    <string name="selfgrant_need_connection">请先连接无线调试，再执行授权</string>
+    <string name="selfgrant_ok_enabled_fmt">✅ 授权成功（%1$s），无线调试已自动开启</string>
+    <string name="selfgrant_ok_but_switch_failed">⚠️ 权限已获得，但系统拒绝写入无线调试开关（部分厂商 ROM 限制）</string>
+    <string name="selfgrant_failed_fmt">❌ 授权失败：%1$s</string>
+
+    <!-- 设置页：自动开启无线调试 -->
+    <string name="settings_selfgrant_sub_granted">已授权。无线调试被系统关闭时，LogLab 会自动重新打开</string>
+    <string name="settings_selfgrant_sub_not_granted">授权后可在无线调试被关闭时自动重新打开，无需手动进开发者选项</string>
+    <string name="settings_selfgrant_badge_ok">已授权</string>
+    <string name="settings_selfgrant_badge_no">未授权</string>
+    <string name="settings_selfgrant_need_conn">请先在「连接设备」页连上无线调试，再执行此操作</string>
+    <string name="settings_selfgrant_failed_fmt">授权失败：%1$s</string>
+    <string name="settings_selfgrant_ok">✅ 已完成：无线调试已开启，「连接」永不过期</string>
+    <string name="settings_selfgrant_switch_refused">⚠️ 已获得权限，但系统拒绝写入无线调试开关（部分厂商 ROM 限制）。\n请手动到「开发者选项 → 无线调试」开启</string>
+
+    <!-- 前台服务常驻通知 -->
+    <string name="action_stop">停止</string>
     <string name="pairing_port_only_fmt">%1$s:%2$d 是配对端口，仅用于一次性配对，不能抓日志，请选择「无线调试」那一项</string>
     <string name="scan_connected_fmt">已连接 127.0.0.1:%1$d</string>
     <string name="connect_failed_fmt">已填入 127.0.0.1:%1$d，但连接失败：%2$s</string>
@@ -260,18 +283,18 @@
     <string name="guide_img1">① 右侧小窗里输配对码，主屏的配对弹窗保持打开</string>
     <string name="guide_img2">② 配对成功自动连接；之后日常抓日志不用再配对</string>
     <string name="guide_sec3">日常使用（配对完成后）</string>
-    <string name="guide_s3_1">打开「无线调试」开关</string>
-    <string name="guide_s3_2">打开本 App —— 自动连接，端口变了也会自动识别，不用手动改</string>
+    <string name="guide_s3_1">直接打开本 App —— 会自动连接；无线调试被系统关掉时会自动重新打开（首次需在「设置」页点一次「授权并开启」）</string>
+    <string name="guide_s3_2">端口变了会自动识别，不用手动改；切换页面不会重复检测，无需等待</string>
     <string name="guide_s3_3">抓完日志：⋮ 复制全部 / 💾 保存成文件</string>
-    <string name="guide_s3_tip">「无线调试」是个开关：不用时可以关掉，下次要用再打开即可。</string>
+    <string name="guide_s3_tip">「无线调试」是个开关：不用时可以关掉，下次要用再打开即可 —— 授权过之后 LogLab 能自己开。</string>
     <string name="guide_sec4">抓应用崩溃日志</string>
     <string name="guide_s4_1">切到底部「崩溃」页，点「开始监控崩溃」</string>
     <string name="guide_s4_2">去打开那个会闪退的应用，让它崩溃一次</string>
     <string name="guide_s4_3">回到「崩溃」页，崩溃记录和堆栈自动出现，可复制、分享</string>
     <string name="guide_sec5">连不上？按顺序试</string>
-    <string name="guide_s5_1">确认「无线调试」开关是打开的（最常见原因）</string>
-    <string name="guide_s5_2">首页点状态行 → 连接设备 → 「重新扫描」</string>
-    <string name="guide_s5_3">还不行：展开「手动填写地址」，照着无线调试主界面填 IP:端口</string>
+    <string name="guide_s5_1">先看「设置 → 自动开启无线调试」是不是「已授权」；未授权就点一次「授权并开启」，之后 LogLab 能自己把开关打开</string>
+    <string name="guide_s5_2">仍未授权？需要先连着一次才能授权：手动打开「无线调试」→ 回到 App 连上 → 再去设置页授权</string>
+    <string name="guide_s5_3">还不行：首页点状态行 → 连接设备 → 「重新扫描」；或展开「手动填写地址」照无线调试主界面填 IP:端口</string>
     <string name="guide_s5_tip">首次连接必须先配对一次；配对后换端口不用重新配对。</string>
     <string name="guide_privacy">提示：抓取的日志可能包含敏感信息（账号、地址等），分享给别人前请自行确认。</string>
 

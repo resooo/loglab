@@ -19,8 +19,8 @@ android {
         applicationId = "com.loglab.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "1.9.5"
+        versionCode = 30
+        versionName = "1.9.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += setOf("zh", "en")
@@ -51,6 +51,22 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // ★ 让 debug 包也走 R8 + 资源压缩。
+            //
+            // 为什么：默认 debug 不混淆，APK 体积是 release 的 4~5 倍
+            //（实测 24.4MB vs 5.2MB），传到手机安装、来回对比都很费时。
+            // 开启后体积接近 release，同时 debuggable 仍为 true（可正常调试、
+            // 看日志、装同签名覆盖版），对本项目「真机验证功能」的用途完全够用。
+            //
+            // 注意：如果某天需要「不混淆以便反射排查」，可临时把这两行注释掉。
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // 与 release 同一签名，便于互相覆盖安装（不换 keystore，老用户可升级）
+            signingConfig = signingConfigs.getByName("release")
         }
         release {
             isMinifyEnabled = true
@@ -106,9 +122,59 @@ android {
             excludes += "META-INF/*.kotlin_module"
             excludes += "META-INF/LICENSE*"
             excludes += "META-INF/NOTICE*"
+
+            // ---- BouncyCastle 后量子密码查找表（体积优化）----
+            // bcprov 自带 Picnic / SPHINCS 等后量子算法的**静态查找表**，
+            // 是 .properties 资源文件而非代码，因此 R8 的 shrinkResources
+            // **不会**清理它们。实测这三张表占 APK 1.2 MB（约 22%）。
+            //
+            // 本项目只用 RSA（ADB 认证的 adbkey），完全不涉及后量子密码，
+            // 且这些表仅在后量子算法被实际调用时才读取，排除后不影响任何功能。
+            excludes += "org/bouncycastle/pqc/**"
+            excludes += "org/bouncycastle/**/*.properties"
         }
     }
 }
+
+/**
+ * APK 输出命名规范化：app-release.apk → LogLab_v1.9.5-release.apk
+ *
+ * 为什么需要：
+ *  1. 产物导出工具（taixu-artifact）按文件名生成规范产物名。默认的
+ *     `app-release.apk` 里没有版本信息，导出后只能得到 `LogLab_app_<时间>.apk`，
+ *     多个版本堆在一起无法区分新旧；
+ *  2. 手机 Download 目录里一眼能看出这是哪个版本；
+ *  3. CI 上传 Release 附件时也能直接用，无需额外重命名步骤。
+ *
+ * 注意 AGP 8.x 的 VariantOutput 接口差异：
+ *  - com.android.build.api.variant.impl.VariantOutputImpl 才有 outputFileName；
+ *  - 用反射调用可避开编译期类型依赖，避免 AGP 小版本升级导致脚本编译失败。
+ *    反射失败时静默跳过（只影响产物名，不影响构建本身）。
+ *
+ * 命名：<项目名>_v<版本名>[-buildType].apk
+ */
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            runCatching {
+                val impl = output as? com.android.build.api.variant.impl.VariantOutputImpl
+                    ?: return@runCatching
+                val version = variant.outputs.firstOrNull()?.versionName?.orNull ?: return@runCatching
+                // 注意：AGP 已给非 release 变体自动追加了 "-<buildType>" 后缀
+                // （如 LogLab_v1.9.5-debug.apk），这里不能重复添加，否则出现
+                // "-debug-debug"。直接按变体重命名即可。
+                impl.outputFileName.set("LogLab_v$version${buildTypeSuffix(variant.buildType)}.apk")
+            }
+        }
+    }
+}
+
+/**
+ * 产物文件名后缀。
+ * release 追求最简洁（手机安装包命名惯例），其它变体带上类型便于区分。
+ */
+fun buildTypeSuffix(buildType: String?): String =
+    if (buildType.isNullOrEmpty() || buildType == "release") "" else "-$buildType"
 
 dependencies {
     // ---- AndroidX core ----

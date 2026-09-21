@@ -12,6 +12,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import com.loglab.app.core.report.AppLogger
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -43,7 +44,7 @@ object AppModule {
     fun provideKadbAdbBackend(
         settings: SettingsRepository,
         certPersistence: KadbCertPersistence,
-        logger: com.loglab.app.core.report.AppLogger
+        logger: AppLogger
     ): KadbAdbBackend = KadbAdbBackend(
         certPersistence = certPersistence,
         hostProvider = { settings.adbHostOnce() },

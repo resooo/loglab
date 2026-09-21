@@ -126,6 +126,17 @@ fun SettingsScreen(
     val toastClearAddress = stringResource(R.string.toast_clear_address)
     val toastCopiedReport = stringResource(R.string.toast_copied_crash_report)
 
+    // 「自动开启无线调试」的结果提示：ViewModel 产出一次性的 message，这里消费并弹 Toast。
+    // 用 LaunchedEffect 而不是在按钮回调里直接弹 —— 因为结果是异步产生的
+    // （要等 pm grant 与写设置完成），放在回调里拿不到。
+    val selfGrantMessage = viewModel.message
+    LaunchedEffect(selfGrantMessage) {
+        if (selfGrantMessage != null) {
+            Toast.makeText(context, selfGrantMessage, Toast.LENGTH_LONG).show()
+            viewModel.consumeMessage()
+        }
+    }
+
     val langLabel = when {
         AppCompatDelegate.getApplicationLocales().isEmpty -> stringResource(R.string.lang_follow_system)
         AppCompatDelegate.getApplicationLocales()[0]?.language == "en" -> stringResource(R.string.lang_en)
@@ -218,6 +229,37 @@ fun SettingsScreen(
                                     viewModel.clearConnectionInfo()
                                     Toast.makeText(context, toastClearAddress, Toast.LENGTH_SHORT).show()
                                 }
+                            )
+                        }
+                    }
+                )
+                V4SettingsDivider()
+                // 自动开启无线调试：授权 + 开关一体化操作
+                //
+                // 为什么放在设置页：连接页的同名按钮是"诊断/修复"性质的入口，
+                // 而设置页才是用户主动管理功能开关的地方。两处都提供，
+                // 但这里偏"功能介绍 + 一次性授权"，连接页偏"当前连接出问题的修复手段"。
+                V4SettingsRow(
+                    title = stringResource(R.string.selfgrant_title),
+                    subtitle = if (viewModel.selfGrantGranted) {
+                        stringResource(R.string.settings_selfgrant_sub_granted)
+                    } else {
+                        stringResource(R.string.settings_selfgrant_sub_not_granted)
+                    },
+                    glyph = "📶",
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            V4SettingsBadge(
+                                text = if (viewModel.selfGrantGranted) {
+                                    stringResource(R.string.settings_selfgrant_badge_ok)
+                                } else {
+                                    stringResource(R.string.settings_selfgrant_badge_no)
+                                },
+                                color = if (viewModel.selfGrantGranted) V4.Green else V4.Muted
+                            )
+                            V4SettingsActionButton(
+                                text = stringResource(R.string.selfgrant_button),
+                                onClick = { viewModel.enableWirelessDebug() }
                             )
                         }
                     }

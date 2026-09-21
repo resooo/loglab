@@ -230,6 +230,29 @@
     <string name="scan_dead_tag">Stale</string>
     <string name="scan_closed_tag">Port closed</string>
     <string name="scan_recommend_tag">Recommended</string>
+
+    <!-- Self-grant (prerequisite for auto-enabling wireless debugging) -->
+    <string name="selfgrant_title">Auto-enable wireless debugging</string>
+    <string name="selfgrant_desc">Once granted, LogLab can toggle "Wireless debugging" for you — no more digging through Developer options.\n\nFirst enable wireless debugging once and connect (needed to perform the grant); after that it\'s fully automatic.</string>
+    <string name="selfgrant_button">Grant &amp; enable</string>
+    <string name="selfgrant_running">Granting…</string>
+    <string name="selfgrant_need_connection">Connect to wireless debugging first, then grant</string>
+    <string name="selfgrant_ok_enabled_fmt">✅ Granted (%1$s); wireless debugging enabled</string>
+    <string name="selfgrant_ok_but_switch_failed">⚠️ Permission obtained, but the system refused to write the wireless-debugging switch (restricted by some vendor ROMs)</string>
+    <string name="selfgrant_failed_fmt">❌ Grant failed: %1$s</string>
+
+    <!-- Settings: auto-enable wireless debugging -->
+    <string name="settings_selfgrant_sub_granted">Granted. LogLab can switch Wireless debugging back on automatically when the system turns it off</string>
+    <string name="settings_selfgrant_sub_not_granted">Grant once and LogLab can re-enable Wireless debugging by itself — no more trips to Developer options</string>
+    <string name="settings_selfgrant_badge_ok">Granted</string>
+    <string name="settings_selfgrant_badge_no">Not granted</string>
+    <string name="settings_selfgrant_need_conn">Connect to wireless debugging on the Devices screen first</string>
+    <string name="settings_selfgrant_failed_fmt">Grant failed: %1$s</string>
+    <string name="settings_selfgrant_ok">✅ Done: wireless debugging is on and the connection never expires</string>
+    <string name="settings_selfgrant_switch_refused">⚠️ Permission granted, but the system refused to write the wireless-debugging switch (restricted on some vendor ROMs).\nPlease enable it manually under Developer options → Wireless debugging</string>
+
+    <!-- Foreground service notification -->
+    <string name="action_stop">Stop</string>
     <string name="pairing_port_only_fmt">%1$s:%2$d is a pairing port, for one-time pairing only and cannot capture logs; pick the "Wireless debugging" one instead</string>
     <string name="scan_connected_fmt">Connected to 127.0.0.1:%1$d</string>
     <string name="connect_failed_fmt">Entered 127.0.0.1:%1$d but connection failed: %2$s</string>
@@ -258,18 +281,18 @@
     <string name="guide_img1">① Type the pairing code in the floating window (right); keep the pairing dialog open on the main screen</string>
     <string name="guide_img2">② Connected automatically after pairing; daily capture does not need pairing again</string>
     <string name="guide_sec3">Daily use (after pairing)</string>
-    <string name="guide_s3_1">Turn on "Wireless debugging"</string>
-    <string name="guide_s3_2">Open this app — it connects automatically and tracks port changes; no manual edits needed</string>
+    <string name="guide_s3_1">Just open the app — it connects on its own, and re-enables Wireless debugging if the system switched it off (tap "Grant &amp; enable" once under Settings first)</string>
+    <string name="guide_s3_2">Port changes are detected automatically; switching tabs no longer re-runs the full check, so there is nothing to wait for</string>
     <string name="guide_s3_3">After capture: ⋮ copy all / 💾 save to file</string>
-    <string name="guide_s3_tip">"Wireless debugging" is just a switch: turn it off when idle and back on when needed.</string>
+    <string name="guide_s3_tip">"Wireless debugging" is just a switch: turn it off when idle and back on when needed — after granting, LogLab can flip it for you.</string>
     <string name="guide_sec4">Capture app crashes</string>
     <string name="guide_s4_1">Switch to the "Crashes" tab and tap "Start monitoring"</string>
     <string name="guide_s4_2">Open the app that crashes and let it crash once</string>
     <string name="guide_s4_3">Back on "Crashes", records and stack traces appear automatically — copy or share them</string>
     <string name="guide_sec5">Cannot connect? Try in order</string>
-    <string name="guide_s5_1">Make sure the "Wireless debugging" switch is on (the most common cause)</string>
-    <string name="guide_s5_2">Tap the status bar on the home screen → Connect device → "Rescan"</string>
-    <string name="guide_s5_3">Still failing: expand "Manual address" and type the IP:port from the Wireless debugging screen</string>
+    <string name="guide_s5_1">Check Settings → "Auto-enable wireless debugging": if it says Not granted, tap "Grant &amp; enable" once and LogLab can flip the switch itself</string>
+    <string name="guide_s5_2">Not granted yet? The grant needs one live connection: turn on Wireless debugging manually, let the app connect, then grant from Settings</string>
+    <string name="guide_s5_3">Still failing: tap the status bar on the home screen → Connect device → "Rescan"; or expand "Manual address" and type the IP:port from the Wireless debugging screen</string>
     <string name="guide_s5_tip">The first connection requires pairing once; after that, port changes do not need re-pairing.</string>
     <string name="guide_privacy">Note: captured logs may contain sensitive info (accounts, locations, etc.). Review before sharing.</string>
 

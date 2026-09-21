@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import com.loglab.app.core.channel.ChannelState
 
 @HiltViewModel
 class ExportViewModel @Inject constructor(
@@ -42,7 +43,7 @@ class ExportViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
 
     val channelState = channelManager.state
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.loglab.app.core.channel.ChannelState(null))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChannelState(null))
 
     var packageName by androidx.compose.runtime.mutableStateOf("")
         private set

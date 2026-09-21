@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.loglab.app.core.report.AppLogger
 
 /**
  * 日志仓库：把「通道 + PID 解析 + 命令构建 + 过滤 + 导出」串成业务用例。
@@ -31,7 +32,7 @@ class LogRepository @Inject constructor(
     private val channelManager: ChannelManager,
     private val settings: SettingsRepository,
     private val exporter: LogExporter,
-    private val logger: com.loglab.app.core.report.AppLogger
+    private val logger: AppLogger
 ) {
 
     /** 取当前通道，未连接则先自动探测 */

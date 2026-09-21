@@ -26,6 +26,10 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.loglab.app.core.channel.ChannelState
+import com.loglab.app.core.report.AppLogger
+import com.loglab.app.core.system.SelfGrant
+import com.loglab.app.core.system.WirelessDebugSettings
 
 /**
  * 连接页 ViewModel：承载全部「连接设备」相关操作。
@@ -43,14 +47,14 @@ class ConnectViewModel @Inject constructor(
     private val pairing: AdbPairing,
     private val nsd: NsdDiscovery,
     private val nsdCacheCleaner: NsdCacheCleaner,
-    private val logger: com.loglab.app.core.report.AppLogger
+    private val logger: AppLogger
 ) : ViewModel() {
 
     val appSettings: StateFlow<AppSettings> = settings.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
 
     val channelState = channelManager.state
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.loglab.app.core.channel.ChannelState(null))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChannelState(null))
 
     var pairPort by mutableStateOf("")
         private set
@@ -73,6 +77,14 @@ class ConnectViewModel @Inject constructor(
     var scanning by mutableStateOf(false)
         private set
     var scanMessage by mutableStateOf<String?>(null)
+        private set
+
+    /** 自授权限进行中（禁用按钮防重复点击） */
+    var granting by mutableStateOf(false)
+        private set
+
+    /** 自授权限的结果提示（区分为「已验证成功」而非「已提交」） */
+    var grantMessage by mutableStateOf<String?>(null)
         private set
 
     fun onPairPortChange(value: String) { pairPort = value }
@@ -284,5 +296,60 @@ class ConnectViewModel @Inject constructor(
 
     fun reconnect(policy: ChannelPolicy = ChannelPolicy.ADB_ONLY) {
         viewModelScope.launch { channelManager.autoConnect(policy) }
+    }
+
+    /**
+     * 手动触发「自授权限 + 开启无线调试」。
+     *
+     * 为什么需要手动入口：
+     *   自动流程依赖「已连上 adbd」这一前提。但用户第一次使用时无线调试可能是关的，
+     *   形成死锁 —— 要开无线调试需要权限，要拿权限需要先连上。
+     *   破解方式：用户先在开发者选项手动开一次无线调试并连上，
+     *   然后点这个按钮完成自授；此后就能全自动了。
+     *
+     * 执行内容：
+     *   ① 用当前 ADB 通道执行 `pm grant` 自授 WRITE_SECURE_SETTINGS
+     *   ② 若成功，写入三个 Settings.Global 打开无线调试
+     *   ③ 回报每一步的真实结果（不是「已提交」而是「已验证」）
+     */
+    fun grantSelfPermission() {
+        viewModelScope.launch {
+            if (granting) return@launch
+            granting = true
+            grantMessage = context.getString(R.string.selfgrant_running)
+            try {
+                val backend = channelManager.adbChannel
+                // 先确认通道可用 —— 否则 pm grant 必然失败，报错也难懂
+                if (!backend.probe()) {
+                    grantMessage = context.getString(R.string.selfgrant_need_connection)
+                    return@launch
+                }
+
+                val result = SelfGrant
+                    .ensureWriteSecureSettings(context, backend)
+
+                result.onSuccess { newly ->
+                    val enabled = WirelessDebugSettings
+                        .enableWirelessDebug(context)
+                    grantMessage = when {
+                        enabled -> context.getString(
+                            R.string.selfgrant_ok_enabled_fmt,
+                            if (newly) "新授予" else "原本已有"
+                        )
+                        // 权限拿到了但开关没写进去 —— 多半是厂商 ROM 限制
+                        else -> context.getString(R.string.selfgrant_ok_but_switch_failed)
+                    }
+                    logger.log("UI", "手动自授权限成功：newly=$newly, wirelessEnabled=$enabled")
+                }.onFailure { e ->
+                    grantMessage = context.getString(
+                        R.string.selfgrant_failed_fmt,
+                        e.message ?: "未知错误"
+                    )
+                    logger.log("UI", "手动自授权限失败：${e.message}")
+                }
+            } finally {
+                granting = false
+            }
+        }
     }
 }

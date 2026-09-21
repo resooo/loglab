@@ -25,6 +25,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.loglab.app.core.channel.ChannelState
+import com.loglab.app.core.connect.DevSettingsLauncher
+import com.loglab.app.core.connect.StartupCheck
+import com.loglab.app.core.connect.StartupCheckResult
+import com.loglab.app.core.report.AppLogger
+import com.loglab.app.core.update.UpdateManager
 
 data class TagFilter(val tag: String, val priority: LogPriority)
 
@@ -37,23 +43,32 @@ class CaptureViewModel @Inject constructor(
     private val repository: LogRepository,
     val channelManager: ChannelManager,
     private val settings: SettingsRepository,
-    private val startupCheck: com.loglab.app.core.connect.StartupCheck,
+    private val startupCheck: StartupCheck,
     val appInfoProvider: AppInfoProvider,
-    private val updateManager: com.loglab.app.core.update.UpdateManager,
-    private val logger: com.loglab.app.core.report.AppLogger
+    private val updateManager: UpdateManager,
+    private val logger: AppLogger
 ) : ViewModel() {
 
     val appSettings: StateFlow<AppSettings> = settings.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
 
     val channelState = channelManager.state
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.loglab.app.core.channel.ChannelState(null))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChannelState(null))
 
     /** 启动智能检查 */
-    var startupResult by mutableStateOf<com.loglab.app.core.connect.StartupCheckResult?>(null)
+    var startupResult by mutableStateOf<StartupCheckResult?>(null)
         private set
     var startupChecking by mutableStateOf(false)
         private set
+
+    /**
+     * 上次**完整**启动检查完成的时间戳（毫秒）。
+     *
+     * 用于 [runStartupCheck] 的快速路径判断：距上次检查够近且通道仍连接时跳过重跑，
+     * 避免每次切页面/回前台都跑一遍最长 40 秒的全量流程。
+     * 0 表示从未检查过（或用户点了手动重试要求强制重跑）。
+     */
+    private var lastCheckAtMs = 0L
 
     /** 检查进行到哪一步了（直连探测 / mDNS 扫描），检查条实时显示 */
     val checkPhase = startupCheck.phase
@@ -130,7 +145,7 @@ class CaptureViewModel @Inject constructor(
     // ---------------- 启动静默检查更新（24h 节流） ----------------
 
     /** 发现的新版本；null=无新版或本次未检查 */
-    var availableUpdate by mutableStateOf<com.loglab.app.core.update.UpdateManager.UpdateInfo?>(null)
+    var availableUpdate by mutableStateOf<UpdateManager.UpdateInfo?>(null)
         private set
 
     /**
@@ -162,10 +177,45 @@ class CaptureViewModel @Inject constructor(
             startupChecking = true
             startupResult = null
             logger.log("UI", "触发启动检查（$reason）")
+
+            // ★ 快速路径：刚刚检查过、且通道仍连着 → 不必再跑完整流程。
+            //
+            // 为什么需要：检查由 ON_RESUME 触发，用户每次切页面/切后台回来都会跑一遍。
+            // 完整流程在"无线调试已关闭"时要经历
+            //   直连失败 → 写开关 → mDNS 第1轮 → 第2轮(最长15s) → 端口扫描
+            // 最坏 40 秒以上，而绝大多数切换场景下连接状态根本没变。
+            //
+            // 判定条件（两者都满足才跳过）：
+            //   ① 距上次成功检查 < SKIP_WINDOW_MS
+            //   ② 通道当前仍处于连接状态
+            // 任一不满足就走完整流程 —— 保守优先，宁可多测一次也不漏掉真实的状态变化。
+            val recentlyChecked = System.currentTimeMillis() - lastCheckAtMs < SKIP_WINDOW_MS
+            val stillConnected = channelState.value.connected
+            if (recentlyChecked && stillConnected && startupResult == null) {
+                logger.log(
+                    "UI",
+                    "跳过启动检查（${(System.currentTimeMillis() - lastCheckAtMs) / 1000}s 前刚查过且通道仍连接）"
+                )
+                startupChecking = false
+                return@launch
+            }
+
             startupResult = runCatching { startupCheck.run() }.getOrNull()
+            lastCheckAtMs = System.currentTimeMillis()
             logger.log("UI", "启动检查结束：${startupResult?.message ?: "无结果（异常）"}")
             startupChecking = false
         }
+    }
+
+    /**
+     * 手动重试：**总是**跑完整流程，绕过快速路径。
+     *
+     * 用户在界面上主动点"重试"时，其意图就是"我改了设置，请重新检测"，
+     * 此时跳过检查会让按钮看起来没反应。
+     */
+    fun retryStartupCheck() {
+        lastCheckAtMs = 0
+        runStartupCheck("手动重试")
     }
 
     fun clearStartupResult() {
@@ -175,11 +225,11 @@ class CaptureViewModel @Inject constructor(
     /**
      * 跳系统「开发者选项」，让用户去打开无线调试开关。
      *
-     * ★ 只用于 [com.loglab.app.core.connect.StartupCheckResult.DebugOff]（无线调试未开启）：
+     * ★ 只用于 [StartupCheckResult.DebugOff]（无线调试未开启）：
      *   那是「开关没打开」，不是「没配对」——两件事的引导动作不同，不能都甩到连接页。
      */
     fun openDevSettings() {
-        val ok = com.loglab.app.core.connect.DevSettingsLauncher.open(context)
+        val ok = DevSettingsLauncher.open(context)
         logger.log("UI", if (ok) "已跳转开发者选项（无线调试未开启）" else "跳转开发者选项失败，已提示手动路径")
     }
 
@@ -375,4 +425,21 @@ class CaptureViewModel @Inject constructor(
 
     private fun parseKeywords(input: String): List<String> =
         input.split(",", "，", " ").map { it.trim() }.filter { it.isNotEmpty() }
+
+    private companion object {
+        /**
+         * 快速路径的生效窗口（毫秒）。
+         *
+         * 含义：距上次完整检查不足此时长、且通道仍处于连接状态时，
+         * [runStartupCheck] 直接跳过重跑。
+         *
+         * 取值 30 秒的依据：
+         *  - 足够长：覆盖"切到设置页看一眼再回来""从后台返回"这类高频操作，
+         *    这些场景下连接状态几乎不可能变；
+         *  - 足够短：无线调试端口在系统侧的变化（重开开关、adbd 重启）通常伴随
+         *    用户主动操作，30 秒内不会"悄悄发生"而不被察觉；
+         *  - 且判定还要求"通道仍连接"这一前提 —— 真断了会立刻走完整流程。
+         */
+        const val SKIP_WINDOW_MS = 30_000L
+    }
 }

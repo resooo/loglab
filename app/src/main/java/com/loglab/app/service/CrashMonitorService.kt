@@ -1,16 +1,11 @@
 package com.loglab.app.service
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.loglab.app.MainActivity
 import com.loglab.app.R
 import com.loglab.app.core.crash.CrashParser
 import com.loglab.app.core.crash.CrashStore
@@ -29,6 +24,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
+import com.loglab.app.core.channel.ChannelManager
+import com.loglab.app.core.crash.CrashEvent
 
 /**
  * 应用崩溃监控前台服务：用户离开 App 去复现崩溃时保持监听不断。
@@ -39,7 +36,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class CrashMonitorService : android.app.Service() {
 
-    @Inject lateinit var channelManager: com.loglab.app.core.channel.ChannelManager
+    @Inject lateinit var channelManager: ChannelManager
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var store: CrashStore
     @Inject lateinit var logger: AppLogger
@@ -133,7 +130,7 @@ class CrashMonitorService : android.app.Service() {
      * 是被去重挡了、被 7 天窗口挡了，还是解析器压根没认出——把包名/类型/时间
      * 连同入库结果一起写下来，设置页的运行日志里就能直接定位。
      */
-    private fun publish(event: com.loglab.app.core.crash.CrashEvent) {
+    private fun publish(event: CrashEvent) {
         val added = store.add(event)
         logger.log(
             "CRASH",
@@ -176,50 +173,28 @@ class CrashMonitorService : android.app.Service() {
         stopSelf()
     }
 
+    /**
+     * 通知的差异描述。相同部分（图标 / ongoing / 停止按钮）统一在
+     * [ServiceNotification.build] 内实现，此处只声明「本服务是谁」。
+     */
+    private val notificationSpec: ServiceNotification.Spec by lazy {
+        ServiceNotification.Spec(
+            channelId = CHANNEL_ID,
+            channelName = getString(R.string.notification_channel_name),
+            channelDesc = getString(R.string.notification_channel_desc),
+            notificationId = NOTIFICATION_ID,
+            title = "应用崩溃监控",
+            serviceClass = CrashMonitorService::class.java,
+            stopAction = ACTION_STOP
+        )
+    }
+
     private fun updateNotification(text: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(text))
+        ServiceNotification.update(this, notificationSpec, text)
     }
 
-    private fun buildNotification(text: String): Notification {
-        createChannel()
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val contentIntent = PendingIntent.getActivity(
-            this, 2, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val stopIntent = PendingIntent.getService(
-            this, 3,
-            Intent(this, CrashMonitorService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_tail)
-            .setContentTitle("应用崩溃监控")
-            .setContentText(text)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(contentIntent)
-            .addAction(R.drawable.ic_stat_tail, "停止", stopIntent)
-            .build()
-    }
-
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                manager.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_ID,
-                        "崩溃监控",
-                        NotificationManager.IMPORTANCE_LOW
-                    ).apply { description = "监控应用崩溃时保持后台运行" }
-                )
-            }
-        }
-    }
+    private fun buildNotification(text: String): Notification =
+        ServiceNotification.build(this, notificationSpec, text)
 
     override fun onDestroy() {
         scope.cancel()

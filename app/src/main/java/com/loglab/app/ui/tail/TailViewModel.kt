@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
+import com.loglab.app.core.channel.ChannelState
+import com.loglab.app.data.model.LogEntry
 
 @HiltViewModel
 class TailViewModel @Inject constructor(
@@ -46,9 +48,9 @@ class TailViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
 
     val channelState = channelManager.state
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.loglab.app.core.channel.ChannelState(null))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChannelState(null))
 
-    val lines: StateFlow<List<com.loglab.app.data.model.LogEntry>> = tailSession.lines
+    val lines: StateFlow<List<LogEntry>> = tailSession.lines
     val tailState: StateFlow<TailState> = tailSession.state
 
     var packageName by mutableStateOf("")

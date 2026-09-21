@@ -69,6 +69,7 @@ import com.loglab.app.ui.components.V4StatusSubtitle
 import com.loglab.app.ui.components.V4StatusTitle
 import com.loglab.app.ui.components.V4TopBar
 import com.loglab.app.ui.theme.V4
+import com.loglab.app.core.connect.CheckPhase
 
 /**
  * 首页（抓取页）—— v4 布局。
@@ -337,7 +338,7 @@ fun CaptureScreen(
                                     V4StatusButton(
                                         text = stringResource(R.string.v4_retry),
                                         ghost = true,
-                                        onClick = { viewModel.runStartupCheck("手动重试") }
+                                        onClick = { viewModel.retryStartupCheck() }
                                     )
                                 }
                             }
@@ -357,7 +358,7 @@ fun CaptureScreen(
                                     V4StatusButton(
                                         text = stringResource(R.string.v4_retry),
                                         ghost = true,
-                                        onClick = { viewModel.runStartupCheck("手动重试") }
+                                        onClick = { viewModel.retryStartupCheck() }
                                     )
                                 }
                             }
@@ -379,7 +380,7 @@ fun CaptureScreen(
                                     V4StatusButton(
                                         text = stringResource(R.string.v4_retry),
                                         ghost = true,
-                                        onClick = { viewModel.runStartupCheck("手动重试") }
+                                        onClick = { viewModel.retryStartupCheck() }
                                     )
                                 }
                             }
@@ -596,9 +597,9 @@ private fun formatSeconds(ms: Long): String {
  */
 @Composable
 private fun checkPhaseSubtitle(
-    phase: com.loglab.app.core.connect.CheckPhase
+    phase: CheckPhase?
 ): String? {
-    val res = phase.res ?: return null
+    val res = phase?.res ?: return null
     return runCatching {
         if (phase.args.isEmpty()) stringResource(res) else stringResource(res, *phase.args.toTypedArray())
     }.getOrNull()

@@ -5,6 +5,7 @@ import com.loglab.app.R
 import com.loglab.app.core.adb.NsdDiscovery
 import com.loglab.app.core.channel.ChannelManager
 import com.loglab.app.core.channel.ChannelPolicy
+import com.loglab.app.core.system.WirelessDebugSettings
 import com.loglab.app.data.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -117,6 +118,7 @@ sealed class StartupCheckResult {
  */
 @Singleton
 class StartupCheck @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val settings: SettingsRepository,
     private val nsd: NsdDiscovery,
     private val channelManager: ChannelManager,
@@ -190,6 +192,9 @@ class StartupCheck @Inject constructor(
         // 系统 mDNS 还会残留幽灵通告）。只要出现该信号，最终结论一律 DebugOff，不被幽灵通告带偏。
         var sawDeadAdbd = false
 
+        // 本次流程中是否由我们主动开启了无线调试（决定 mDNS 第 2 轮的等待窗口）。
+        var autoEnabled = false
+
         // ① 未配对 → 引导
         if (!cur.adbPaired) {
             logger.log("CHECK", "未配对，跳过连接与扫描")
@@ -225,6 +230,16 @@ class StartupCheck @Inject constructor(
                 runCatching { channelManager.disconnect() }
                 logger.log("CHECK", "旧端口无法执行命令（adbd 半死：无线调试多半已关闭），转用 mDNS 判定")
                 setPhase(R.string.check_phase_dead_port)
+
+                // ★ 自动开启无线调试（2026-09-21 恢复）
+                // 前提：已通过 `pm grant` 拿到 WRITE_SECURE_SETTINGS（见 SelfGrant）。
+                // 做法：写 Settings.Global 把开关打开，然后交给下面的 mDNS 流程重新发现端口。
+                //
+                // ⚠️ 实测教训（2026-09-21 13:52 真机日志）：adbd 重启后会**重新随机分配端口**
+                // （实见 44427 → 39997），所以「开完开关重连旧端口」是错的；
+                // 且 adbd 从重启到重新通告约需 8 秒，因此下面 mDNS 第 2 轮的等待窗口
+                // 会按 autoEnabled 标志延长到 15 秒。
+                autoEnabled = tryEnableWirelessDebug()
             }
         }
 
@@ -497,5 +512,32 @@ class StartupCheck @Inject constructor(
             else ->
                 R.string.status_scan_noresult to emptyList()
         }
+    }
+
+    /**
+     * 尝试自动开启无线调试。
+     *
+     * 仅在「直连失败且已持有 [WirelessDebugSettings.WRITE_SECURE_SETTINGS]」时调用。
+     * 该权限由 [SelfGrant] 在首次连接成功后通过 `pm grant` 自动获取（移植自
+     * Shizuku 的做法），因此**不需要 root / Shizuku / 电脑**。
+     *
+     * 只负责把开关打开；端口发现完全交给后续的 mDNS 流程 —— 因为 adbd 重启后
+     * 会**重新随机分配端口**，重连旧端口是无效的（真机实测 44427 → 39997）。
+     *
+     * @return 是否成功写入开关（用于决定 mDNS 第 2 轮的等待窗口）
+     */
+    private fun tryEnableWirelessDebug(): Boolean {
+        if (!WirelessDebugSettings.hasWriteSecureSettings(appContext)) {
+            logger.log("CHECK", "直连不可用且无写设置权限，跳过自动开启（可在连接页手动授权）")
+            return false
+        }
+
+        val enabled = WirelessDebugSettings.enableWirelessDebug(appContext)
+        logger.log(
+            "CHECK",
+            if (enabled) "已自动开启无线调试；adbd 重启后会分配【新端口】，交由 mDNS 重新发现"
+            else "尝试自动开启无线调试失败（厂商 ROM 可能限制写入 adb_wifi_enabled）"
+        )
+        return enabled
     }
 }

@@ -25,3 +25,19 @@ keystore.pw.local
 # 本地代码图谱索引 / 构建产物
 /.codegraph/
 /*.apk
+
+# Kotlin 编译器的会话标记文件（每次构建自动生成，与机器绑定）
+/.kotlin/
+
+# 子智能体协作产生的临时记录（工具生成，非项目内容）
+/.taixu-subagent/
+
+# 构建工具遗留的清单文件（非本项目源码）
+/META-INF/
+module-info.class
+# 编译时 class 文件泄漏到项目根目录（曾出现过 cafe/ 与 com/）
+/cafe/
+/com/
+
+# 本地提交信息草稿（多行中文 commit 用 git commit -F 引用，不入库）
+/commit-msg.local.txt

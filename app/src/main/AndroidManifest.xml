@@ -18,6 +18,17 @@
     <!-- Android 13+ 通知权限 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      自动开启无线调试所需的受保护权限（signature|privileged）。
+      普通安装的 App 声明也拿不到，需由 shell 通过 `pm grant` 授予 —— 见 SelfGrant.kt。
+      拿到后可写 Settings.Global 的 adb_wifi_enabled / ADB_ENABLED / adb_allowed_connection_time，
+      实现「启动 App 自动恢复无线调试」。
+      机制来源：RikkaApps/Shizuku 13.6.0 的无线调试启动方案。
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- 导出日志到公共目录（Android 9 及以下） -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

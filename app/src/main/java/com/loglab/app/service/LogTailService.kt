@@ -1,16 +1,11 @@
 package com.loglab.app.service
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.loglab.app.MainActivity
 import com.loglab.app.R
 import com.loglab.app.core.logcat.LogcatConfig
 import dagger.hilt.android.AndroidEntryPoint
@@ -81,52 +76,29 @@ class LogTailService : android.app.Service() {
         }
     }
 
+    /**
+     * 通知的差异描述。相同部分（图标 / ongoing / 停止按钮）统一在
+     * [ServiceNotification.build] 内实现，此处只声明「本服务是谁」。
+     */
+    private val notificationSpec: ServiceNotification.Spec by lazy {
+        ServiceNotification.Spec(
+            channelId = CHANNEL_ID,
+            channelName = getString(R.string.notification_channel_name),
+            channelDesc = getString(R.string.notification_channel_desc),
+            notificationId = NOTIFICATION_ID,
+            title = getString(R.string.tail_notification_title),
+            serviceClass = LogTailService::class.java,
+            stopAction = ACTION_STOP,
+            openExtra = EXTRA_OPEN_TAIL to true
+        )
+    }
+
     private fun updateNotification(text: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(text))
+        ServiceNotification.update(this, notificationSpec, text)
     }
 
-    private fun buildNotification(text: String): Notification {
-        createChannel()
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_OPEN_TAIL, true)
-        }
-        val contentIntent = PendingIntent.getActivity(
-            this, 0, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val stopIntent = PendingIntent.getService(
-            this, 1,
-            Intent(this, LogTailService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_tail)
-            .setContentTitle(getString(R.string.tail_notification_title))
-            .setContentText(text)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(contentIntent)
-            .addAction(R.drawable.ic_stat_tail, "停止", stopIntent)
-            .build()
-    }
-
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                manager.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_ID,
-                        getString(R.string.notification_channel_name),
-                        NotificationManager.IMPORTANCE_LOW
-                    ).apply { description = getString(R.string.notification_channel_desc) }
-                )
-            }
-        }
-    }
+    private fun buildNotification(text: String): Notification =
+        ServiceNotification.build(this, notificationSpec, text)
 
     private fun stopTailing() {
         tailSession.stop()

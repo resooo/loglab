@@ -27,6 +27,14 @@ class AdbConnection(
     @Volatile
     private var nextLocalId = 1
 
+    /**
+     * `open()` 阶段的等待上限（毫秒）。
+     *
+     * 取值依据：adbd 回应 `A_OKAY` 通常毫秒级；5 秒足够覆盖设备繁忙，
+     * 又不会让「非 adbd 端口」把流程拖到分钟级。
+     */
+    private val OPEN_TIMEOUT_MS = 5000
+
     var deviceBanner: String = ""
         private set
 
@@ -61,29 +69,43 @@ class AdbConnection(
         transport.setSoTimeout(0)
     }
 
-    /** 打开一个服务流（如 shell:logcat -d） */
+    /** 打开一个服务流（如 `shell:logcat -d`） */
     fun open(service: String): AdbStream {
         val localId = nextLocalId++
         transport.send(AdbMessage.open(localId, service))
 
-        while (true) {
-            val message = transport.readMessage()
-                ?: throw IOException("打开流时连接被关闭")
-            when (message.command) {
-                AdbProtocol.A_OKAY -> {
-                    if (message.arg1 == localId) {
-                        return AdbStream(transport, localId, message.arg0)
+        // ⚠️ open 阶段必须限时：`connect()` 在握手成功后把 socket 超时设为 0
+        // （无限），以支持 logcat 这类长流读取。但若对端不回应 A_OKAY
+        // （例如端口上其实不是 adbd），readMessage() 会**永久阻塞**。
+        // 真机实测（2026-09-21）：某非 adbd 端口上单个 open() 卡了 53 秒，
+        // 而候选端口常有多个，累积等待可达数分钟。
+        transport.setSoTimeout(OPEN_TIMEOUT_MS)
+        try {
+            while (true) {
+                val message = transport.readMessage()
+                    ?: throw IOException("打开流时连接被关闭")
+                when (message.command) {
+                    AdbProtocol.A_OKAY -> {
+                        if (message.arg1 == localId) {
+                            return AdbStream(transport, localId, message.arg0)
+                        }
+                        // 其他流的 OKAY，忽略
                     }
-                    // 其他流的 OKAY，忽略
-                }
-                AdbProtocol.A_CLSE -> {
-                    if (message.arg1 == localId) {
-                        val reason = String(message.payload, Charsets.UTF_8)
-                        throw classifyFailure(reason)
+                    AdbProtocol.A_CLSE -> {
+                        if (message.arg1 == localId) {
+                            val reason = String(message.payload, Charsets.UTF_8)
+                            throw classifyFailure(reason)
+                        }
                     }
+                    else -> Unit // WRTE 等忽略
                 }
-                else -> Unit // WRTE 等忽略
             }
+        } catch (e: java.net.SocketTimeoutException) {
+            // 能建连但不实现 ADB 协议（或 adbd 已半死）→ 明确报超时，便于日志定位
+            throw IOException("打开服务超时（${OPEN_TIMEOUT_MS}ms 内未收到应答）：$service", e)
+        } finally {
+            // 成败都恢复：失败时若不复原，同一个连接后续的长流读取会受影响
+            runCatching { transport.setSoTimeout(0) }
         }
     }
 
