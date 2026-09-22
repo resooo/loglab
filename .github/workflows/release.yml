@@ -75,9 +75,33 @@ jobs:
           cp "$SRC" "$DEST"
           echo "已重命名为: $DEST"
 
+      - name: Resolve release notes
+        id: notes
+        run: |
+          # 用仓库里的 RELEASE_NOTES_v<tag>.md 作为 Release 正文。
+          #
+          # 之前漏了这一步，导致 Release 页面只有附件、没有任何更新说明 ——
+          # 用户在 GitHub 上完全看不到"这次更新带来了什么"，
+          # 而辛苦写好的 RELEASE_NOTES 文件也从未被引用。
+          #
+          # 文件缺失时不能让 action 失败（那会连 APK 都发布不了），
+          # 故这里先判断存在性，并给出最小兜底文案。
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          FILE="RELEASE_NOTES_${TAG}.md"
+          if [ -f "$FILE" ]; then
+            echo "使用更新说明: $FILE"
+            echo "path=$FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::$FILE 不存在，Release 正文将使用兜底文案"
+            printf '## %s\n\n详见 [CHANGELOG.md](CHANGELOG.md)。\n' "$TAG" > /tmp/fallback-notes.md
+            echo "path=/tmp/fallback-notes.md" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/LogLab_v*.apk
+          body_path: ${{ steps.notes.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
