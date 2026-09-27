@@ -3,6 +3,43 @@
 All notable changes to LogLab are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versioning follows [SemVer](https://semver.org/).
 
+## [1.9.7] - 2026-09-21
+
+### Fixed
+- **Connection was lost after the app process restarted**, showing up as
+  "paired successfully → worked at first → later or after backgrounding it can no longer connect".
+  The Connect screen would even list the port as connectable while the handshake failed with
+  `SSLv3_ALERT_CERTIFICATE_UNKNOWN`.
+
+  Root cause: Kadb keeps the wireless-debugging client certificate in a **static in-memory field**,
+  and adbd only trusts the key material from the moment of pairing. When the process was killed and
+  restarted, the field was empty — and **Kadb regenerated a brand-new key pair** before we could
+  restore the saved one. Our restore was guarded by `if (memory is non-empty) return`, so it saw the
+  freshly generated (never-paired) key, skipped restoring, and the handshake was rejected.
+
+  The guard is now "does a saved certificate exist", not "is memory empty", so the saved pair is
+  applied unconditionally before every connection. Verified against `KadbCert`'s actual bytecode
+  that the reflected field names (`cert` / `key`) and the public `set(byte[], byte[])` API are
+  correct.
+
+  ⚠️ **Users upgrading must re-pair once** — the previously saved pair may already be the wrong key
+  material, in which case restoring it just re-applies the bad value.
+
+- `KadbCertPersistence.save()` no longer returns silently when the reflective field lookup fails.
+  It previously left an empty archive with no signal at all, which presented as "this device was
+  never paired" and made the problem hard to trace.
+
+### Added
+- `scripts/update-release-body.py` — applies `RELEASE_NOTES_<tag>.md` to an existing GitHub Release
+  without re-running the build.
+
+### Build
+- GitHub Release pages now show the update notes. `action-gh-release` was missing `body_path`, so
+  every Release was published with an **empty body** and the carefully written
+  `RELEASE_NOTES_*.md` files were never referenced. There is now a resolve step with a fallback to
+  `CHANGELOG.md`, so a missing notes file degrades the description instead of failing the release
+  (which would otherwise prevent the APK from being published at all).
+
 ## [1.9.6] - 2026-09-21
 
 ### Added

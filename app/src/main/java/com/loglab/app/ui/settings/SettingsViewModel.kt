@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.loglab.app.R
+import com.loglab.app.core.adb.KadbCertPersistence
 import com.loglab.app.core.channel.ChannelManager
 import com.loglab.app.core.report.AppLogger
 import com.loglab.app.core.system.SelfGrant
@@ -46,7 +47,8 @@ class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val logger: AppLogger,
     private val updateManager: UpdateManager,
-    private val channelManager: ChannelManager
+    private val channelManager: ChannelManager,
+    private val kadbCertPersistence: KadbCertPersistence
 ) : ViewModel() {
 
     /** 运行日志（App 自身诊断日志，诊断组可查看/复制/清除） */
@@ -165,8 +167,13 @@ class SettingsViewModel @Inject constructor(
     fun resetPairing() {
         viewModelScope.launch {
             settings.update { it.copy(adbPaired = false) }
+            // 必须同时清掉证书存档，否则重新配对后会出问题：
+            // restoreIfNeeded() 是"有存档就无条件覆盖内存"，
+            // 若旧存档（可能是错的密钥）还在，重新配对后每次连接
+            // 都会被它覆盖回去，表现为"重新配对也没用"。
+            runCatching { kadbCertPersistence.clear() }
             runCatching { channelManager.disconnect() }
-            logger.log("UI", "设置页：已重置配对状态（通道已断开）")
+            logger.log("UI", "设置页：已重置配对状态并清除证书存档（通道已断开）")
         }
     }
 
