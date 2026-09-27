@@ -11,6 +11,8 @@ import com.loglab.app.core.apps.AppInfo
 import com.loglab.app.core.apps.AppInfoProvider
 import com.loglab.app.core.channel.ChannelManager
 import com.loglab.app.R
+import com.loglab.app.core.system.WirelessDebugSettings
+import com.loglab.app.ui.components.TopBarWifiState
 import com.loglab.app.core.logcat.LogBuffer
 import com.loglab.app.core.logcat.LogPriority
 import com.loglab.app.core.logcat.LogcatConfig
@@ -216,6 +218,109 @@ class CaptureViewModel @Inject constructor(
     fun retryStartupCheck() {
         lastCheckAtMs = 0
         runStartupCheck("手动重试")
+    }
+
+    // ---- 顶栏 WiFi 图标 ----
+
+    /** WiFi 图标当前该显示什么状态（供 UI 直接取用，避免把判断逻辑写在 Composable 里） */
+    val wifiState: TopBarWifiState
+        get() = when {
+            channelState.value.connected -> TopBarWifiState.Connected
+            wirelessDebugOn -> TopBarWifiState.EnabledNotConnected
+            else -> TopBarWifiState.Disabled
+        }
+
+    /** 系统「无线调试」开关的实际状态（只读，无需权限） */
+    var wirelessDebugOn by mutableStateOf(false)
+        private set
+
+    /** WiFi 点击操作的进行中标志（防重复点击） */
+    var wifiBusy by mutableStateOf(false)
+        private set
+
+    /** WiFi 点击后的一次性提示（UI 消费后调 [consumeWifiMessage]） */
+    var wifiMessage by mutableStateOf<String?>(null)
+        private set
+
+    fun consumeWifiMessage() {
+        wifiMessage = null
+    }
+
+    /** 刷新无线调试开关状态（进入页面、切回前台、操作后调用） */
+    fun refreshWirelessDebugState() {
+        wirelessDebugOn = WirelessDebugSettings.isWirelessDebugEnabled(context)
+    }
+
+    /**
+     * 点击顶栏 WiFi 图标：**一键自动开启无线调试并连接**。
+     *
+     * 这是把「设置页授权」+「启动检查」两步合成一个用户动作。
+     * 完整流程：
+     *  1. 若无线调试未开 → 先写开关（需已授权 WRITE_SECURE_SETTINGS）；
+     *  2. 重跑启动检查（内部会 mDNS 发现新端口并连接）。
+     *
+     * 失败时给出**可操作**的提示，而不是笼统的"失败"：
+     *  - 未配对 → 引导去配对；
+     *  - 未授权 → 引导去设置页授权；
+     *  - 其它 → 带上真实原因。
+     */
+    fun onWifiIconClick() {
+        if (wifiBusy) return
+        viewModelScope.launch {
+            wifiBusy = true
+            try {
+                refreshWirelessDebugState()
+
+                // ① 未配对：什么都做不了，先引导配对
+                if (!settings.current().adbPaired) {
+                    wifiMessage = context.getString(R.string.wifi_start_need_pair)
+                    return@launch
+                }
+
+                // ② 开关已开且已连接 → 无需操作
+                if (channelState.value.connected) {
+                    wifiMessage = context.getString(R.string.wifi_start_ok)
+                    return@launch
+                }
+
+                // ③ 开关未开 → 尝试写入（需要权限）
+                if (!wirelessDebugOn) {
+                    if (!WirelessDebugSettings.hasWriteSecureSettings(context)) {
+                        wifiMessage = context.getString(R.string.wifi_start_no_perm)
+                        return@launch
+                    }
+                    val enabled = WirelessDebugSettings.enableWirelessDebug(context)
+                    logger.log("WIFI", "点击 WiFi 图标：写入无线调试开关=$enabled")
+                    if (!enabled) {
+                        wifiMessage = context.getString(
+                            R.string.wifi_start_failed_fmt,
+                            "系统拒绝写入无线调试开关（部分厂商 ROM 限制）"
+                        )
+                        return@launch
+                    }
+                    refreshWirelessDebugState()
+                    wifiMessage = context.getString(R.string.wifi_starting)
+                }
+
+                // ④ 重跑启动检查：内部完成 mDNS 发现新端口 + 连接
+                // 强制绕过快速路径 —— 用户刚打开开关，必须重新发现端口
+                lastCheckAtMs = 0
+                runStartupCheck("点击 WiFi 图标")
+
+                val result = startupResult
+                wifiMessage = when {
+                    result?.connected == true -> context.getString(R.string.wifi_start_ok)
+                    result is StartupCheckResult.DebugOff ->
+                        context.getString(R.string.wifi_start_failed_fmt, "开关已写但 adbd 未响应，请稍后重试")
+                    result is StartupCheckResult.NotReachable ->
+                        context.getString(R.string.wifi_start_failed_fmt, result.message)
+                    else -> context.getString(R.string.wifi_start_failed_fmt, "未知原因")
+                }
+            } finally {
+                refreshWirelessDebugState()
+                wifiBusy = false
+            }
+        }
     }
 
     fun clearStartupResult() {

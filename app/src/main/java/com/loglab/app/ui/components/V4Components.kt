@@ -26,6 +26,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.loglab.app.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -105,7 +109,18 @@ fun V4TopBar(
     statusColor: Color = V4.Green,
     onStatusClick: (() -> Unit)? = null,
     statusEnabled: Boolean = true,
-    applyStatusBarInset: Boolean = true
+    applyStatusBarInset: Boolean = true,
+    /**
+     * 可选的 WiFi 状态图标（点击 = 自动开启无线调试 + 连接）。
+     *
+     * 放在标题与状态点之间。为 null 时完全不渲染，其它页面不受影响。
+     *
+     * 之所以单独给一个图标而不是复用状态点：状态点表达的是"通道连没连上"，
+     * 而 WiFi 图标要表达的是"**无线调试开关本身**开没开" ——
+     * 两者是不同层次的状态，混用会让用户无法区分"开关没开"和"开关开了但连不上"。
+     */
+    wifiState: TopBarWifiState? = null,
+    onWifiClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -129,10 +144,61 @@ fun V4TopBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        V4StatusDot(
+        if (wifiState != null) {
+            V4WifiIndicator(state = wifiState, onClick = onWifiClick)
+        }
+ V4StatusDot(
             color = if (statusEnabled) statusColor else V4.Muted,
             onClick = onStatusClick
         )
+    }
+}
+
+/** WiFi 图标要表达的三种状态（互斥，按优先级判断） */
+enum class TopBarWifiState {
+    /** 无线调试已开启 + 通道已连接 */
+    Connected,
+
+    /** 无线调试已开启，但通道还没连上 */
+    EnabledNotConnected,
+
+    /** 无线调试未开启（图标变暗，点击可自动开启） */
+    Disabled
+}
+
+/**
+ * 顶栏 WiFi 状态图标。
+ *
+ * 用 emoji + 着色而非矢量图：项目其余图标（▷ ⌕ ☰ ⋮ 🔑 📶）都是这一风格，
+ * 保持一致；同时也免去新增 drawable 资源。
+ *
+ * 点击行为由调用方决定（首页=自动开启+连接），这里只负责展示与转发点击。
+ */
+@Composable
+fun V4WifiIndicator(
+    state: TopBarWifiState,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val (glyph, tint, descRes) = when (state) {
+        TopBarWifiState.Connected ->
+            Triple("📶", V4.Green, R.string.wifi_state_connected)
+        TopBarWifiState.EnabledNotConnected ->
+            Triple("📶", V4.Warn, R.string.wifi_state_enabled)
+        TopBarWifiState.Disabled ->
+            Triple("📵", V4.Muted, R.string.wifi_state_disabled)
+    }
+
+    val description = stringResource(descRes)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .semantics { contentDescription = description },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = glyph, fontSize = 13.sp, color = tint)
     }
 }
 

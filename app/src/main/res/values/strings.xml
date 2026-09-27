@@ -243,6 +243,18 @@
     <string name="selfgrant_ok_but_switch_failed">⚠️ 权限已获得，但系统拒绝写入无线调试开关（部分厂商 ROM 限制）</string>
     <string name="selfgrant_failed_fmt">❌ 授权失败：%1$s</string>
 
+    <!-- 顶栏 WiFi 状态图标（点击 = 自动开启无线调试 + 连接） -->
+    <string name="wifi_state_connected">无线调试已开启，已连接</string>
+    <string name="wifi_state_enabled">无线调试已开启，点击连接</string>
+    <string name="wifi_state_disabled">无线调试未开启，点击自动开启</string>
+
+    <!-- 首页顶栏 WiFi 点击后的提示 -->
+    <string name="wifi_starting">正在开启无线调试并连接…</string>
+    <string name="wifi_start_ok">✅ 无线调试已开启并连接成功</string>
+    <string name="wifi_start_need_pair">请先完成一次配对，之后 LogLab 才能自动开启无线调试</string>
+    <string name="wifi_start_no_perm">需要先授权「自动开启无线调试」（设置页 → 授权并开启）</string>
+    <string name="wifi_start_failed_fmt">开启失败：%1$s</string>
+
     <!-- 设置页：自动开启无线调试 -->
     <string name="settings_selfgrant_sub_granted">已授权。无线调试被系统关闭时，LogLab 会自动重新打开</string>
     <string name="settings_selfgrant_sub_not_granted">授权后可在无线调试被关闭时自动重新打开，无需手动进开发者选项</string>

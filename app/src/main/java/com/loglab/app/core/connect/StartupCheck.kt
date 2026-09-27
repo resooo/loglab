@@ -167,15 +167,47 @@ class StartupCheck @Inject constructor(
         listOf(LOOPBACK to port)
 
     /**
-     * 采用一个候选地址：写入配置 → 连接 + echo 复验。
-     * 返回 [Verify.OK] 表示地址留在配置里；失败自动断开（配置保留候选值，
-     * 由调用方决定回滚——逐候选尝试时用 [rollbackTo] 恢复）。
+     * 采用一个候选地址：写入配置 → **直接建连** → echo 复验。
+     *
+     * ## ⚠️ 为什么不走 `channelManager.autoConnect()`
+     *
+     * `autoConnect()` 的唯一闸门是 `adbChannel.probe()`，而 Kadb 后端的
+     * `probe()` 调用的是库的 `connectionCheck()`。真机实测（2026-09-21）该
+     * 调用对**无线调试的 TLS 端口**会返回 false —— 于是不管后面能不能真正连上，
+     * `autoConnect()` 都一律失败，表现为：
+     *
+     *   「端口扫描显示 40321 可连接 ✅，但候选逐个被跳过，最后报无线调试未开启」
+     *
+     * 即 adbChannel.lastError 里明明记录了握手/证书错误，却因为闸门先失败而
+     * 从未真正尝试过连接。
+     *
+     * 参考实现（太墟 wireless-adb 方案）的做法是**不加中间闸门**：
+     * 拿到端口就直接连，用真实连接结果说话。这里改为同样的思路 ——
+     * 先 activatе 通道（跳过 probe），再用 `echo` 判定 adbd 是否真的能跑命令。
+     *
+     * @return [Verify.OK] 表示地址可用且已激活；失败自动断开。
      */
     private suspend fun tryAdopt(host: String, port: Int): Verify {
         settings.update { it.copy(adbHost = host, adbPort = port) }
-        val v = connectVerified()
-        if (v != Verify.OK) runCatching { channelManager.disconnect() }
-        return v
+
+        // 直接激活通道：内部执行一次真实命令（echo）作为判据，
+        // 不做 probe 预检 —— 预检会误杀真实可用的端口（见 attach 的文档）。
+        val result = runCatching { channelManager.attach(ChannelPolicy.ADB_ONLY) }.getOrNull()
+        if (result?.isSuccess == true) return Verify.OK
+
+        logger.log(
+            "CHECK",
+            "候选 $host:$port 不可用：${result?.exceptionOrNull()?.message ?: "未知原因"}"
+        )
+        // 区分「连不上」与「连上但命令不通」：
+        // 后者（adbd 半死 / 证书被拒）是「无线调试正在关闭」的信号，需要单独标记。
+        val reason = result?.exceptionOrNull()?.message.orEmpty()
+        val looksLikeHalfDead = reason.contains("echo") ||
+            reason.contains("命令") ||
+            reason.contains("CERTIFICATE") ||
+            reason.contains("证书")
+        runCatching { channelManager.disconnect() }
+        return if (looksLikeHalfDead) Verify.DEAD else Verify.UNREACHABLE
     }
 
     /** 回滚到原配置并重连（尽力而为，回滚失败不影响后续流程） */

@@ -241,6 +241,18 @@
     <string name="selfgrant_ok_but_switch_failed">⚠️ Permission obtained, but the system refused to write the wireless-debugging switch (restricted by some vendor ROMs)</string>
     <string name="selfgrant_failed_fmt">❌ Grant failed: %1$s</string>
 
+    <!-- Top bar WiFi indicator (tap = auto-enable wireless debugging + connect) -->
+    <string name="wifi_state_connected">Wireless debugging on, connected</string>
+    <string name="wifi_state_enabled">Wireless debugging on, tap to connect</string>
+    <string name="wifi_state_disabled">Wireless debugging off, tap to enable</string>
+
+    <!-- Feedback after tapping the WiFi indicator -->
+    <string name="wifi_starting">Enabling wireless debugging and connecting…</string>
+    <string name="wifi_start_ok">✅ Wireless debugging enabled and connected</string>
+    <string name="wifi_start_need_pair">Please pair once first — then LogLab can enable wireless debugging by itself</string>
+    <string name="wifi_start_no_perm">Grant "Auto-enable wireless debugging" first (Settings → Grant &amp; enable)</string>
+    <string name="wifi_start_failed_fmt">Failed to enable: %1$s</string>
+
     <!-- Settings: auto-enable wireless debugging -->
     <string name="settings_selfgrant_sub_granted">Granted. LogLab can switch Wireless debugging back on automatically when the system turns it off</string>
     <string name="settings_selfgrant_sub_not_granted">Grant once and LogLab can re-enable Wireless debugging by itself — no more trips to Developer options</string>

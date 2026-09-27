@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -157,12 +158,36 @@ fun CaptureScreen(
         }
     }
 
+    // WiFi 图标的点击结果：一次性 Toast
+    val wifiMessage = viewModel.wifiMessage
+    LaunchedEffect(wifiMessage) {
+        if (wifiMessage != null) {
+            android.widget.Toast.makeText(context, wifiMessage, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.consumeWifiMessage()
+        }
+    }
+
+    // 进入页面 & 回到前台时刷新无线调试开关状态（用户可能在系统设置里改过）
+    LaunchedEffect(Unit) { viewModel.refreshWirelessDebugState() }
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshWirelessDebugState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // ── ① 顶栏：只剩标题 + 状态点 ──
         V4TopBar(
             title = stringResource(R.string.tab_capture),
             statusColor = statusColor,
-            onStatusClick = onGoConnect
+            onStatusClick = onGoConnect,
+            // WiFi 图标：表达「无线调试开关」本身的状态（与状态点的"通道连没连"是两层）
+            wifiState = viewModel.wifiState,
+            onWifiClick = { viewModel.onWifiIconClick() }
         )
 
         // ── ② 高频行：按使用频率从左到右 ──
